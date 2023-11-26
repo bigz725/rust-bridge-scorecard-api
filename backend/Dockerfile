@@ -11,7 +11,7 @@ RUN rm ./target/release/deps/rust_bridge_scorecard_api_backend*
 RUN cargo build --release
 
 #rust_bridge_scorecard_api_backend
-FROM debian:buster-slim
+FROM debian:bookworm-slim
 ARG APP=/usr/src/app
 
 RUN apt-get update \

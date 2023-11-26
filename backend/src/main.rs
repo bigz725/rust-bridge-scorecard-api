@@ -10,18 +10,26 @@ async fn hello_world_handler() -> Json<Value> {
 
 #[tokio::main]
 async fn main () {
+    println!("Starting server...");
     dotenv::dotenv().ok();
+    println!("Loaded .env file.");
 
     let db_conn = db_conn().await;
+    println!("Connected to MongoDB.");
     let port = dotenv::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let port_int = port.parse::<u16>().unwrap();
-    let addr = SocketAddr::from(([0, 0, 0, 0], port_int));
+    let addr = SocketAddr::from(([0,0,0,0], port_int));
     let app = 
         Router::new()
           .route("/", get(hello_world_handler))
-          .with_state(db_conn);
+          .with_state(db_conn)
+          .into_make_service_with_connect_info::<SocketAddr>();
 
-        axum::Server::bind(&addr).serve(app.into_make_service()).await.unwrap();
+    println!("App created, binding to {}...", addr);
+    axum::Server::bind(&addr).serve(app).await.expect("Failed to start server");
+
+    println!("Listening on {}", addr);
+    ()
 }
 
 async fn db_conn() -> Client {
@@ -39,6 +47,6 @@ async fn db_conn() -> Client {
         .hosts(server_addresses)
         .build();
 
-    Client::with_options(options).unwrap()
+    Client::with_options(options).expect("Failed to initialize MongoDB client.")
 }
 
