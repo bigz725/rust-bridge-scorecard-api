@@ -1,0 +1,9 @@
+Dockerfile
+.dockerignore
+.gitignore
+.git
+.vscode
+*.log
+logs
+exampleFiles
+config/secret.*
