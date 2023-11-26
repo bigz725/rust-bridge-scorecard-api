@@ -25,6 +25,7 @@ stages:
 
 
 before_script:
+  - cd backend
   - docker info
   - docker context create builder-context
   - docker buildx create --name builderx --driver docker-container --use builder-context
