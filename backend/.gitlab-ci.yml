@@ -1,0 +1,139 @@
+#image: node:latest
+image: docker:20
+variables:
+  DOCKER_HOST: tcp://docker:2375/
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  REGISTRY: registry.local.zkissane.com
+  IMAGE: zachistan/rust_bridge_scorecard_api
+
+  CURRENT_TAG: $REGISTRY/$IMAGE:$CI_COMMIT_REF_SLUG-$CI_PIPELINE_ID
+  CACHE_TAG: $REGISTRY/$IMAGE:cache
+
+  BUILDKIT_INLINE_CACHE: "1"
+
+services:
+- name: docker:dind
+  command: ["--tls=false"]
+
+stages:
+  - build
+  - test
+  - push
+  - release
+  - deploy
+
+
+before_script:
+  - docker info
+  - docker context create builder-context
+  - docker buildx create --name builderx --driver docker-container --use builder-context
+#---TEMPLATES-----------
+.build_template:
+  stage: build
+  variables:
+    VERSION: $CI_COMMIT_REF_SLUG-$CI_PIPELINE_ID
+    TEST_TAG: $REGISTRY/$IMAGE:$VERSION-testing
+    TEST_TAG_AMD_64: $REGISTRY/$IMAGE:$VERSION-testingamd64
+    TEST_TAG_ARM_64: $REGISTRY/$IMAGE:$VERSION-testingarm64
+
+
+.push_template:
+  stage: push
+  variables:
+    VERSION: $CI_COMMIT_REF_SLUG-$CI_PIPELINE_ID
+    CURRENT_TAG: $REGISTRY/$IMAGE:$VERSION
+    
+#end TEMPLATES--------------
+  
+#----BRANCH JOBS------------
+build_amd64:
+  tags:
+    - amd64
+  extends: .build_template
+  script:
+    - 'echo "Building cache image: $CACHE_TAG for amd64 architecture using branch build"'
+    - 'echo "with command: docker buildx build --build-arg tag="$VERSION" --cache-to=type=registry,ref="$CACHE_TAG" --cache-from "$CACHE_TAG" --tag "$CACHE_TAG" --tag "$TEST_TAG_AMD_64" --push --platform=linux/amd64 . "'
+    - docker buildx build --build-arg tag="$VERSION" --cache-to=type=registry,ref="$CACHE_TAG" --cache-from "$CACHE_TAG" --tag "$CACHE_TAG" --tag "$TEST_TAG_AMD_64" --push --platform=linux/amd64 .
+    - echo "TEST_TAG_AMD_64=$TEST_TAG_AMD_64" >> variables.env
+  artifacts:
+    reports:
+      dotenv: variables.env  
+
+build_arm64:
+  tags:
+    - arm64
+  extends: .build_template
+  script:
+    - 'echo "Building cache image: $CACHE_TAG for arm64 architecture using branch build"'
+    - 'echo "with command: docker buildx build --build-arg tag="$VERSION" --cache-to=type=registry,ref="$CACHE_TAG" --cache-from "$CACHE_TAG" --tag "$CACHE_TAG" --tag "$TEST_TAG_ARM_64" --push --platform=linux/arm64/v8 . "'
+    - docker buildx build --build-arg tag="$VERSION" --cache-to=type=registry,ref="$CACHE_TAG" --cache-from "$CACHE_TAG" --tag "$CACHE_TAG" --tag "$TEST_TAG_ARM_64" --push --platform=linux/arm64/v8 .
+    - echo "TEST_TAG_ARM_64=$TEST_TAG_ARM_64" >> variables.env
+  artifacts:
+    reports:
+      dotenv: variables.env   
+
+push:
+  extends: .push_template
+  script:
+    - 'echo "Pushing images from $CACHE_TAG to $CURRENT_TAG." for branch build'
+    - docker buildx build --build-arg tag="$CI_PIPELINE_ID" --cache-from "$CACHE_TAG" --tag "$CURRENT_TAG" --push --platform=linux/arm64/v8,linux/amd64 .
+#---END BRANCH JOBS
+#---MAIN JOBS ----------
+
+#---END MAIN JOBS    
+# test_amd64:
+#   tags:
+#     - amd64
+#   needs:
+#     - job: build_amd64
+#       artifacts: true    
+#   stage: test
+#   script:
+#     - 'echo "Pulling $TEST_TAG_AMD_64 to test using npm test"'
+#     - docker pull $TEST_TAG_AMD_64
+#     - docker run $TEST_TAG_AMD_64 npm test    
+
+# test_arm64:
+#   rules:
+#     - when: never 
+#   allow_failure: true
+#   tags:
+#     - arm64
+#   needs:
+#     - job: build_arm64
+#       artifacts: true   
+#   stage: test
+#   script:
+#     - 'echo "Pulling $TEST_TAG_ARM_64 to test using npm test"'
+#     - docker pull $TEST_TAG_ARM_64
+#     - docker run $TEST_TAG_ARM_64 npm test
+  
+deploy_staging:
+  stage: deploy
+  environment:
+    name: Staging VM
+    url: http://bridge-staging.zkissane.com
+  script:
+    - 'echo "Deploying to staging"'
+  when: manual
+
+# deploy_pi_kube_cluster:
+#   stage: deploy
+#   environment:
+#     name: Staging cluster
+#     url: http://bridge.zkissane.com
+
+#   before_script:
+#     - 'which ssh-agent || (apt-get update -y && apt-get install openssh-client -y)'
+#     - mkdir -p ~/.ssh
+#     - eval $(ssh-agent -s)
+#     - '[[ -f ./dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no \n\n" > ~/.ssh/config'
+
+#   script:
+#     - ' echo "Deploying $CURRENT_TAG to the Super6c Pi Cluster with command"'
+#     - echo "ssh -o StrictHostKeyChecking=no deployer@$CLUSTER_MAIN_NODE 'helm repo update chartmuseum && helm upgrade --set image.tag=$VERSION bridge-api chartmuseum/bridge-scorecard-api'"
+#     - ssh-add <(echo "$DEPLOYER_ID_ECDSA")
+#     # Make sure to update deployer's list of chartmusem's charts
+#     - ssh -o StrictHostKeyChecking=no deployer@"$CLUSTER_MAIN_NODE" 'helm repo update chartmuseum && KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm upgrade --set image.tag=$VERSION bridge-api chartmuseum/bridge-scorecard-api'
+#   when: manual  
