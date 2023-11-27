@@ -29,7 +29,6 @@ async fn main () {
     axum::Server::bind(&addr).serve(app).await.expect("Failed to start server");
 
     println!("Listening on {}", addr);
-    ()
 }
 
 async fn db_conn() -> Client {
