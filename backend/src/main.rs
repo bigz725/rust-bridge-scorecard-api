@@ -1,8 +1,15 @@
+
+pub use self::error::{Error, Result};
+
 use std::net::SocketAddr;
 
 use axum::{response::Json, routing::get, Router,};
 use mongodb::{Client, options::ServerAddress};
 use serde_json::{json, Value};
+
+
+mod error;
+mod web;
 
 async fn hello_world_handler() -> Json<Value> {
     Json(json!({"message": "Hello, World!"}))
@@ -19,16 +26,23 @@ async fn main () {
     let port = dotenv::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let port_int = port.parse::<u16>().unwrap();
     let addr = SocketAddr::from(([0,0,0,0], port_int));
-    let app = 
-        Router::new()
-          .route("/", get(hello_world_handler))
-          .with_state(db_conn)
-          .into_make_service_with_connect_info::<SocketAddr>();
 
-    println!("App created, binding to {}...", addr);
-    axum::Server::bind(&addr).serve(app).await.expect("Failed to start server");
+    let routes_all = Router::new()
+    .merge(routes_hello())
+    .merge(web::routes_login::routes());
+
+    println!("Perparing to bind to {}...", addr);
+    axum::Server::bind(&addr)
+        .serve(routes_all.into_make_service())
+        .await
+        .expect("Failed to start server");
 
     println!("Listening on {}", addr);
+}
+
+fn routes_hello() -> Router {
+    Router::new()
+        .route("/", get(hello_world_handler))
 }
 
 async fn db_conn() -> Client {
