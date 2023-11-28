@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{Error, Result, AppState};
 use axum::{Json, Router, routing::post};
 
 use serde::Deserialize;
@@ -11,7 +11,7 @@ struct LoginPayload {
     password: String,
 }
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/auth/signin", post(login))
 
@@ -25,8 +25,5 @@ async fn login(payload: Json<LoginPayload>) -> Result<Json<Value>> {
             "password": payload.password,
         }
     }));
-    // let body = Json(json!({
-    //     "result": "success"
-    // }));
     Ok(body)
 }
