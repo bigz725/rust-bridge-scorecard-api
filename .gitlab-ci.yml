@@ -58,7 +58,7 @@ build_amd64:
     - echo "TEST_TAG_AMD_64=$TEST_TAG_AMD_64" >> variables.env
   artifacts:
     reports:
-      dotenv: backend/variables.env  
+      dotenv: variables.env  
 
 build_arm64:
   tags:
@@ -71,7 +71,7 @@ build_arm64:
     - echo "TEST_TAG_ARM_64=$TEST_TAG_ARM_64" >> variables.env
   artifacts:
     reports:
-      dotenv: backend/variables.env   
+      dotenv: variables.env   
 
 push:
   extends: .push_template
