@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 axum = {version = "0.7.1"}
-bcrypt = "0.15.0"
+bcrypt = {version="0.15.0", features=["alloc"]}
 bson = "2.7.0"
 dotenv = "0.15.0"
 mongodb = "2.7.1"
