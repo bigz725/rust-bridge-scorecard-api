@@ -1,9 +1,10 @@
 use crate::{Error, Result, AppState};
-use axum::{Json, Router, routing::post};
-
+use axum::{Json, Router, routing::post, extract::State};
+//use extract::State;
 use serde::Deserialize;
 use serde_json::{Value, json};
-
+use mongodb::{bson::doc, Collection};
+use crate::models::user::{User, find_user_by_username};
 
 #[derive(Debug, Deserialize)]
 struct LoginPayload {
@@ -17,13 +18,18 @@ pub fn routes() -> Router<AppState> {
 
 }
 
-async fn login(payload: Json<LoginPayload>) -> Result<Json<Value>> {
-    let body = Json(json!({
-        "result": {
-            "success": true,
-            "username": payload.username,
-            "password": payload.password,
-        }
-    }));
-    Ok(body)
+async fn login(State(state): State<AppState>, payload: Json<LoginPayload>) -> Result<Json<Value>> {
+    let db = &(state.mongodb_client);
+    let user = find_user_by_username(db, &payload.username).await;
+    if let Some(user) = user {
+        println!("Found user: {:?}", user);
+        Ok(Json(json!({
+            "message": "Found user",
+            "user": user
+        })))
+    } else {
+        println!("User not found");
+        Err(Error::LoginFail)
+    }
+
 }

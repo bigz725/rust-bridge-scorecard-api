@@ -3,7 +3,6 @@ pub use self::error::{Error, Result};
 pub use self::state::AppState;
 use std::net::SocketAddr;
 
-use axum::handler::HandlerWithoutStateExt;
 use axum::{response::Json, routing::get, Router,};
 use mongodb::{Client, options::ServerAddress};
 use serde_json::{json, Value};
@@ -13,6 +12,7 @@ use tokio::net::TcpListener;
 mod error;
 mod web;
 mod state;
+mod models;
 
 async fn hello_world_handler() -> Json<Value> {
     Json(json!({"message": "Hello, World!"}))
@@ -29,7 +29,7 @@ async fn main () {
     let listener = listener(addr).await;
 
     let state = AppState {
-        mongodb_client: db_conn()
+        mongodb_client: db_conn_simple().await
     };
 
     println!("Connected to MongoDB.");
@@ -51,14 +51,20 @@ async fn listener(addr: SocketAddr) -> TcpListener {
 fn bind_addr() -> SocketAddr {
     let port = dotenv::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let port_int = port.parse::<u16>().unwrap();
-    SocketAddr::from(([0,0,0,0], port_int))
+    SocketAddr::from(([127,0,0,1], port_int))
+}
+
+async fn db_conn_simple() -> Client {
+    let uri = dotenv::var("MONGODB_URL").unwrap_or_else(|_| "mongodb://localhost".to_string());
+    Client::with_uri_str(uri).await.expect("Failed to connect to mongodb")
 }
 
 fn db_conn() -> Client {
-    let uri = dotenv::var("MONGODB_URL").unwrap_or_else(|_| "mongodb://localhost/bridge_scorecard_api".to_string());
+    let uri = dotenv::var("MONGODB_URL").unwrap_or_else(|_| "mongodb://localhost".to_string());
     let server_addresses = vec![ServerAddress::Tcp { host: uri, port: None}];
     let min_pool_size = dotenv::var("MONGODB_MIN_POOL_SIZE").unwrap_or_else(|_| "1".to_string());
     let max_pool_size = dotenv::var("MONGODB_MAX_POOL_SIZE").unwrap_or_else(|_| "10".to_string());
+    let database = dotenv::var("MONGODB_DATABASE").unwrap_or_else(|_| "bridge_scorecard_api".to_string());
     let (min_pool_size_int, max_pool_size_int) = (
         min_pool_size.parse::<u32>().unwrap(),
         max_pool_size.parse::<u32>().unwrap()
@@ -67,6 +73,7 @@ fn db_conn() -> Client {
         .min_pool_size(min_pool_size_int)
         .max_pool_size(max_pool_size_int)
         .hosts(server_addresses)
+        .default_database(database)
         .build();
 
     Client::with_options(options).expect("Failed to initialize MongoDB client.")
