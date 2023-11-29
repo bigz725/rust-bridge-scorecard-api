@@ -1,10 +1,11 @@
-use crate::{Error, Result, AppState};
+use crate::{Error, Result, AppState, auth::jwt::{Claims, KEYS, create_token}};
 use axum::{Json, Router, routing::post, extract::State};
+use jsonwebtoken::{encode, Header};
 //use extract::State;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use mongodb::{bson::doc, Collection};
-use crate::models::user::{User, find_user_by_username};
+use mongodb::bson::doc;
+use crate::models::user::find_user_by_username;
 use bcrypt::verify;
 #[derive(Debug, Deserialize)]
 struct LoginPayload {
@@ -26,10 +27,20 @@ async fn login(State(state): State<AppState>, payload: Json<LoginPayload>) -> Re
         match verify(&payload.password, &user.password) {
             Ok(valid) => {
                 if valid {
-                    println!("Password is valid");
+                    
+                    let claims = Claims {
+                        id: user.id.to_string(),
+                        salt: user.salt.clone(),
+                        exp: 24 * 60 * 60,
+                    };
+                    let token = create_token(&claims);
+
+                    println!("User {} successfully logged in", user.username);
                     Ok(Json(json!({
-                        "message": "Found user",
-                        "user": user
+                        "id": user.id.to_string(),
+                        "username": user.username,
+                        "email": user.email,
+                        "accessToken": token
                     })))
                 } else {
                     println!("Password is invalid");
@@ -42,7 +53,7 @@ async fn login(State(state): State<AppState>, payload: Json<LoginPayload>) -> Re
             }
         }
     } else {
-        println!("User not found");
+        println!("Login attempt for non-existant user {}", payload.username);
         Err(Error::InvalidCredentials)
     }
 

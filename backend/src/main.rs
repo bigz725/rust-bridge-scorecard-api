@@ -13,10 +13,13 @@ mod error;
 mod web;
 mod state;
 mod models;
+mod auth;
 
 async fn hello_world_handler() -> Json<Value> {
     Json(json!({"message": "Hello, World!"}))
 }
+
+
 
 #[tokio::main]
 async fn main () {

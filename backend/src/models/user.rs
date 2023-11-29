@@ -1,10 +1,11 @@
 use mongodb::{bson::{DateTime, doc}, Client, Collection,};
 use serde::{Deserialize, Serialize};
-use bson::serde_helpers::{serialize_hex_string_as_object_id, serialize_bson_datetime_as_rfc3339_string};
+use bson::{serde_helpers::serialize_bson_datetime_as_rfc3339_string, oid::ObjectId};
 #[derive(Debug, Deserialize, Serialize)]
 pub struct User {
     // #[serde(serialize_with = "serialize_hex_string_as_object_id")]
-    // pub _id: String,
+    #[serde(rename = "_id")]
+    pub id: ObjectId,
     pub username: String,
     pub password: String,
     pub salt: String,

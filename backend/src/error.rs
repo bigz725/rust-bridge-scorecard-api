@@ -1,4 +1,5 @@
-use axum::{response::{IntoResponse, Response}, http::StatusCode};
+use axum::{response::{IntoResponse, Response}, http::StatusCode, Json};
+use serde_json::{Value, json};
 
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -20,17 +21,15 @@ impl std::error::Error for Error {}
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         match self {
-            Error::LoginFail => {
-                println!("->> {:12} - {self:?}", "INTO_RES");
-                (StatusCode::INTERNAL_SERVER_ERROR, "LOGIN_FAIL").into_response()
+            Error::LoginFail | Error::InvalidCredentials => {
+                (StatusCode::NOT_FOUND, unable_to_login_json()).into_response()
             }
-            Error::InvalidCredentials => {
-                println!("->> {:12} - {self:?}", "INTO_RES");
-                (StatusCode::UNAUTHORIZED, "INVALID_CREDENTIALS").into_response()
-            }
-        
         }
         // println!("->> {:12} - {self:?}", "INTO_RES");
         // (StatusCode::INTERNAL_SERVER_ERROR, "UNHANDLED_CLIENT_ERROR").into_response()
     }
+}
+
+fn unable_to_login_json () -> Json<Value> {
+    Json(json!({"message": "Unable to login"}))
 }
