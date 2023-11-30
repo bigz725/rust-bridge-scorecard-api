@@ -1,24 +1,17 @@
-
-pub use self::error::{Error, Result};
-pub use self::state::AppState;
-use std::net::SocketAddr;
-
-use axum::{response::Json, routing::get, Router,};
-use mongodb::{Client, options::ServerAddress};
-use serde_json::{json, Value};
-use tokio::net::TcpListener;
-
-
 mod error;
 mod web;
 mod state;
 mod models;
 mod auth;
+mod db;
+mod networking;
 
-async fn hello_world_handler() -> Json<Value> {
-    Json(json!({"message": "Hello, World!"}))
-}
+pub use self::error::{Error, Result};
+pub use self::state::AppState;
+pub use db::db_conn_simple;
+use networking::{listener, bind_addr};
 
+use axum::Router;
 
 
 #[tokio::main]
@@ -29,56 +22,24 @@ async fn main () {
 
 
     let addr = bind_addr();
-    let listener = listener(addr).await;
+    let listener = listener(networking::bind_addr()).await;
 
     let state = AppState {
         mongodb_client: db_conn_simple().await
     };
-
     println!("Connected to MongoDB.");
 
-    
+    println!("Listening on {}", addr);
     let app = Router::new()
-    .route("/", get(hello_world_handler))
-    .merge(web::routes_login::routes())
-    .with_state(state).into_make_service();
+        .merge(web::routes_hello::routes())
+        .merge(web::routes_login::routes())
+        .with_state(state).into_make_service();
     axum::serve(listener, app).await.unwrap();
 
     println!("Listening on {}", addr);
 }
 
-async fn listener(addr: SocketAddr) -> TcpListener {
-    TcpListener::bind(addr).await.expect("Failed to bind to port")
-}
 
-fn bind_addr() -> SocketAddr {
-    let port = dotenv::var("PORT").unwrap_or_else(|_| "8080".to_string());
-    let port_int = port.parse::<u16>().unwrap();
-    SocketAddr::from(([127,0,0,1], port_int))
-}
 
-async fn db_conn_simple() -> Client {
-    let uri = dotenv::var("MONGODB_URL").unwrap_or_else(|_| "mongodb://localhost".to_string());
-    Client::with_uri_str(uri).await.expect("Failed to connect to mongodb")
-}
 
-fn db_conn() -> Client {
-    let uri = dotenv::var("MONGODB_URL").unwrap_or_else(|_| "mongodb://localhost".to_string());
-    let server_addresses = vec![ServerAddress::Tcp { host: uri, port: None}];
-    let min_pool_size = dotenv::var("MONGODB_MIN_POOL_SIZE").unwrap_or_else(|_| "1".to_string());
-    let max_pool_size = dotenv::var("MONGODB_MAX_POOL_SIZE").unwrap_or_else(|_| "10".to_string());
-    let database = dotenv::var("MONGODB_DATABASE").unwrap_or_else(|_| "bridge_scorecard_api".to_string());
-    let (min_pool_size_int, max_pool_size_int) = (
-        min_pool_size.parse::<u32>().unwrap(),
-        max_pool_size.parse::<u32>().unwrap()
-    );
-    let options = mongodb::options::ClientOptions::builder()
-        .min_pool_size(min_pool_size_int)
-        .max_pool_size(max_pool_size_int)
-        .hosts(server_addresses)
-        .default_database(database)
-        .build();
-
-    Client::with_options(options).expect("Failed to initialize MongoDB client.")
-}
 

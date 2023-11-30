@@ -1,6 +1,5 @@
-use crate::{Error, Result, AppState, auth::jwt::{Claims, KEYS, create_token}};
+use crate::{Error, Result, AppState, auth::jwt::{Claims, create_token}};
 use axum::{Json, Router, routing::post, extract::State};
-use jsonwebtoken::{encode, Header};
 //use extract::State;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -23,11 +22,10 @@ async fn login(State(state): State<AppState>, payload: Json<LoginPayload>) -> Re
     let db = &(state.mongodb_client);
     let user = find_user_by_username(db, &payload.username).await;
     if let Some(user) = user {
-        println!("Found user: {:?}", user);
+        println!("Found user: {:?}", (&user.id.to_string(), &user.username, &user.email));
         match verify(&payload.password, &user.password) {
             Ok(valid) => {
-                if valid {
-                    
+                if valid {                    
                     let claims = Claims {
                         id: user.id.to_string(),
                         salt: user.salt.clone(),
