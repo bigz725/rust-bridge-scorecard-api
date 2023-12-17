@@ -20,39 +20,37 @@ pub fn routes() -> Router<AppState> {
 
 async fn login(State(state): State<AppState>, payload: Json<LoginPayload>) -> Result<Json<Value>> {
     let db = &(state.mongodb_client);
-    let user = find_user_by_username(db, &payload.username).await;
-    if let Some(user) = user {
-        println!("Found user: {:?}", (&user.id.to_string(), &user.username, &user.email));
-        match verify(&payload.password, &user.password) {
-            Ok(valid) => {
-                if valid {                    
-                    let claims = Claims {
-                        id: user.id.to_string(),
-                        salt: user.salt.clone(),
-                        exp: 24 * 60 * 60,
-                    };
-                    let token = create_token(&claims);
+    let user = find_user_by_username(db, &payload.username).await.expect("no user");
+    match verify(&payload.password, &user.password) {
+        Ok(valid) => {
+            if valid {
+                let claims = Claims {
+                    id: user.id.to_string(), //user.id.to_string(),
+                    salt: user.salt.clone(),
+                    exp: 24 * 60 * 60,
+                };
+                let token = create_token(&claims);
+                println!("User {} successfully logged in", user.username);
+                let doc = json!({
+                    "id": user.id.to_string(),
+                    "username": user.username,
+                    "email": user.email,
+                    "accessToken": token,
+                    "roles": user.roles.iter().map(|role| role.to_string()).collect::<Vec<String>>(),
+                });
 
-                    println!("User {} successfully logged in", user.username);
-                    Ok(Json(json!({
-                        "id": user.id.to_string(),
-                        "username": user.username,
-                        "email": user.email,
-                        "accessToken": token
-                    })))
-                } else {
-                    println!("Password is invalid");
-                    Err(Error::InvalidCredentials)
-                }
+                Ok(Json(doc))
             }
-            Err(e) => {
-                println!("Error: {:?}", e);
-                Err(Error::LoginFail)
+            else {
+                println!("Password is invalid");
+                Err(Error::InvalidCredentials)
             }
         }
-    } else {
-        println!("Login attempt for non-existant user {}", payload.username);
-        Err(Error::InvalidCredentials)
+        Err(e) => {
+            println!("Error: {:?}", e);
+            Err(Error::LoginFail)
+        }
+
     }
 
 }
