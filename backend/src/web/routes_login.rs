@@ -1,11 +1,9 @@
 use crate::{
     auth::jwt::{create_token, Claims},
-    models::user::Role,
+    models::user::{find_user_by_username,Role},
     AppState, Error, Result,
 };
 use axum::{extract::State, routing::post, Json, Router};
-//use extract::State;
-use crate::models::user::find_user_by_username;
 use bcrypt::verify;
 use mongodb::bson::doc;
 use serde::Deserialize;
