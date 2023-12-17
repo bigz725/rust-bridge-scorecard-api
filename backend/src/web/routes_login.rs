@@ -20,7 +20,15 @@ pub fn routes() -> Router<AppState> {
 
 async fn login(State(state): State<AppState>, payload: Json<LoginPayload>) -> Result<Json<Value>> {
     let db = &(state.mongodb_client);
-    let user = find_user_by_username(db, &payload.username).await.expect("no user");
+
+    let user = find_user_by_username(db, &payload.username).await;
+    let user = match user {
+        Ok(user) => user,
+        Err(e) => {
+            println!("Error: {:?}", e);
+            return Err(Error::LoginFail)
+        }
+    };
     match verify(&payload.password, &user.password) {
         Ok(valid) => {
             if valid {
@@ -43,7 +51,7 @@ async fn login(State(state): State<AppState>, payload: Json<LoginPayload>) -> Re
             }
             else {
                 println!("Password is invalid");
-                Err(Error::InvalidCredentials)
+                Err(Error::LoginFail)
             }
         }
         Err(e) => {
