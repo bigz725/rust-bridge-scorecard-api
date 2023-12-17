@@ -10,7 +10,7 @@ use bcrypt::verify;
 use mongodb::bson::doc;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use chrono::{Duration, Utc, Days};
+use chrono::Utc;
 
 #[derive(Debug, Deserialize)]
 struct LoginPayload {
