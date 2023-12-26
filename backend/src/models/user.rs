@@ -1,3 +1,4 @@
+use bcrypt::BcryptError;
 use mongodb::{bson::{DateTime, doc}, Client, Collection};
 use serde::{Deserialize, Serialize};
 use bson::{serde_helpers::serialize_bson_datetime_as_rfc3339_string, oid::ObjectId, Document};
@@ -13,7 +14,6 @@ pub struct User {
     pub password: String,
     pub salt: String,
     pub email: String,
-    //pub roles: Vec<ObjectId>,
     pub roles: Vec<Role>,
 
     #[serde(serialize_with = "serialize_bson_datetime_as_rfc3339_string", rename = "createdAt")]
@@ -28,7 +28,6 @@ pub struct NewUser {
     pub password: String,
     pub  salt: String,
     pub email: String,
-    //pub roles: Vec<ObjectId>,
     pub roles: Vec<Role>,
     #[serde(serialize_with = "serialize_bson_datetime_as_rfc3339_string", rename = "createdAt")]
     pub created_at: DateTime,
@@ -47,8 +46,13 @@ pub struct Role {
     pub updated_at: DateTime,
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum UserError {
+    QueryError(#[from] mongodb::error::Error),
+    InvalidUserRecord(#[from] bson::de::Error),
+    BadDecryption(#[from] BcryptError),
+    InvalidCredentials,
     UserNotFound,
 }
 
@@ -64,14 +68,13 @@ impl Display for User {
     }
 }
 
-impl std::error::Error for UserError {}
 impl core::fmt::Display for UserError {
 	fn fmt(&self, fmt: &mut core::fmt::Formatter,) -> core::result::Result<(), core::fmt::Error> {
 		write!(fmt, "{self:?}")
 	}
 }
 
-pub async fn find_user_by_username(db: &Client, username: &str) -> Result<User, Box<dyn std::error::Error>> {
+pub async fn find_user_by_username(db: &Client, username: &str) -> Result<User, UserError> {
     let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
     let mut results  = users.aggregate([
             stage_lookup_user(username),
@@ -79,15 +82,13 @@ pub async fn find_user_by_username(db: &Client, username: &str) -> Result<User, 
     ).await?;
 
     let result = results.try_next().await?;
-    match result {
-        Some(result) => {
-            let doc = bson::from_document(result)?;
-            let user: User = bson::from_bson(doc).unwrap();
-            Ok(user)
-        }
-        None => {
-            Err(Box::new(UserError::UserNotFound))
-        }
+    if let Some(result) = result {
+        let doc = bson::from_document(result)?;
+        let user: User = bson::from_bson(doc)?;
+        Ok(user)
+    } else {
+        println!("User {} not found", username);
+        Err(UserError::UserNotFound)
     }
 }
 
