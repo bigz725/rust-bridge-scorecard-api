@@ -1,13 +1,15 @@
 use axum::{response::{IntoResponse, Response}, http::StatusCode, Json};
 use serde_json::{Value, json};
 
+use crate::models::user::UserError;
+
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-#[derive(Debug)]
-pub enum Error{
-    LoginFail,
-    InvalidCredentials,
+#[derive(thiserror::Error, Debug)]
+pub enum Error{    
+    LoginFail(#[from] UserError),
+    
 }
 
 impl core::fmt::Display for Error {
@@ -16,17 +18,13 @@ impl core::fmt::Display for Error {
 	}
 }
 
-impl std::error::Error for Error {}
-
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         match self {
-            Error::LoginFail | Error::InvalidCredentials => {
-                (StatusCode::NOT_FOUND, unable_to_login_json()).into_response()
+            Error::LoginFail(_)  => {
+                (StatusCode::UNAUTHORIZED, unable_to_login_json()).into_response()
             }
         }
-        // println!("->> {:12} - {self:?}", "INTO_RES");
-        // (StatusCode::INTERNAL_SERVER_ERROR, "UNHANDLED_CLIENT_ERROR").into_response()
     }
 }
 
