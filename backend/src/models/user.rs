@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use bson::{serde_helpers::serialize_bson_datetime_as_rfc3339_string, oid::ObjectId, Document};
 use tokio_stream::StreamExt;
 use std::fmt::{Display, Formatter, Result as FmtResult};
+use tracing::warn;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct User {
@@ -87,7 +88,7 @@ pub async fn find_user_by_username(db: &Client, username: &str) -> Result<User, 
         let user: User = bson::from_bson(doc)?;
         Ok(user)
     } else {
-        println!("User {} not found", username);
+        warn!("User {} not found", username);
         Err(UserError::UserNotFound)
     }
 }

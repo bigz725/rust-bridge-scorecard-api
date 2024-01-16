@@ -1,7 +1,7 @@
 use jsonwebtoken::{EncodingKey, DecodingKey, encode, Header};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-
+use tracing::error;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -31,7 +31,12 @@ pub static KEYS: Lazy<Keys> = Lazy::new(|| {
 
 
 pub fn create_token(claims: &Claims) -> String {
-    encode(&Header::default(), &claims, &KEYS.encoding).unwrap()
+    encode(&Header::default(), &claims, &KEYS.encoding).unwrap_or_else(|_| 
+        { 
+            error!("Could not encode the token."); 
+            panic!("Could not encode the token."); 
+        }
+    )
 }
 
 

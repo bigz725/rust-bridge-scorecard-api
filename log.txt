@@ -1,0 +1,6 @@
+[2m2024-01-03T05:53:26.974631Z[0m [32m INFO[0m main [2mbackend[0m[2m:[0m Starting server...
+[2m2024-01-03T05:53:26.975757Z[0m [32m INFO[0m main [2mbackend[0m[2m:[0m Loaded .env file.
+[2m2024-01-03T05:53:26.977849Z[0m [32m INFO[0m main [2mbackend[0m[2m:[0m Connected to MongoDB.
+[2m2024-01-03T05:53:26.979013Z[0m [32m INFO[0m main [2mbackend[0m[2m:[0m Listening on 0.0.0.0:4040
+[2m2024-01-03T05:53:34.465803Z[0m [32m INFO[0m tokio-runtime-worker [1mlogin[0m[1m{[0m[3mpayload[0m[2m=[0mJson(LoginPayload { username: "zkissane", password: "fortestingonly" })[1m}[0m[2m:[0m [2mbackend::web::routes_login[0m[2m:[0m User zkissane successfully logged in
+[2m2024-01-03T05:53:36.307138Z[0m [32m INFO[0m tokio-runtime-worker [1mlogin[0m[1m{[0m[3mpayload[0m[2m=[0mJson(LoginPayload { username: "zkissane", password: "fortestingonly" })[1m}[0m[2m:[0m [2mbackend::web::routes_login[0m[2m:[0m User zkissane successfully logged in
