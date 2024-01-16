@@ -9,6 +9,7 @@ use mongodb::bson::doc;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use chrono::Utc;
+use tracing::{info, instrument, warn};
 
 #[derive(Debug, Deserialize)]
 struct LoginPayload {
@@ -20,6 +21,7 @@ pub fn routes() -> Router<AppState> {
     Router::new().route("/api/auth/signin", post(login))
 }
 
+#[instrument(skip(state))]
 async fn login(State(state): State<AppState>, payload: Json<LoginPayload>) -> Result<Json<Value>, Error> {
     let db = &(state.mongodb_client);
 
@@ -29,12 +31,12 @@ async fn login(State(state): State<AppState>, payload: Json<LoginPayload>) -> Re
     if verify_result {
         let claims = get_claims(&user);
         let token = create_token(&claims);
-        println!("User {} successfully logged in", user.username);
+        info!("User {} successfully logged in", user.username);
         let response = response(user, token);
 
         Ok(response)
     } else {
-        println!("Password incorrect for user {}", payload.username);
+        warn!("Password incorrect for user {}", payload.username);
         Err(Error::LoginFail(InvalidCredentials))
     }
 }

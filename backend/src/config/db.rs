@@ -1,7 +1,5 @@
 use mongodb::{Client, options::ServerAddress};
 
-
-
 pub async fn db_conn_simple() -> Client {
     let uri = std::env::var("MONGODB_URL").unwrap_or_else(|_| "mongodb://localhost".to_string());
     Client::with_uri_str(uri).await.expect("Failed to connect to mongodb")
