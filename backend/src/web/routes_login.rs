@@ -1,14 +1,14 @@
 use crate::{
     auth::jwt::{create_token, Claims},
-    models::user::{find_user_by_username,Role, User, UserError, UserError::InvalidCredentials},
-    AppState, Error, 
+    models::user::{find_user_by_username, Role, User, UserError, UserError::InvalidCredentials},
+    AppState, Error,
 };
 use axum::{extract::State, routing::post, Json, Router};
 use bcrypt::verify;
+use chrono::Utc;
 use mongodb::bson::doc;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use chrono::Utc;
 use tracing::{info, instrument, warn};
 
 #[derive(Debug, Deserialize)]
@@ -21,15 +21,19 @@ pub fn routes() -> Router<AppState> {
     Router::new().route("/api/auth/signin", post(login))
 }
 
-#[instrument(skip(state))]
-async fn login(State(state): State<AppState>, payload: Json<LoginPayload>) -> Result<Json<Value>, Error> {
+#[instrument(name = "Login", skip(state, payload))]
+async fn login(
+    State(state): State<AppState>,
+    payload: Json<LoginPayload>,
+) -> Result<Json<Value>, Error> {
     let db = &(state.mongodb_client);
 
     let user = find_user_by_username(db, &payload.username).await?;
-    let verify_result = verify(&payload.password, &user.password).map_err( UserError::BadDecryption)?;
+    let verify_result =
+        verify(&payload.password, &user.password).map_err(UserError::BadDecryption)?;
 
     if verify_result {
-        let claims = get_claims(&user);
+        let claims = create_claims(&user);
         let token = create_token(&claims);
         info!("User {} successfully logged in", user.username);
         let response = response(user, token);
@@ -60,7 +64,7 @@ fn response(user: User, token: String) -> Json<Value> {
     Json(doc)
 }
 
-fn get_claims(user: &User) -> Claims {
+fn create_claims(user: &User) -> Claims {
     let now = Utc::now().timestamp();
     Claims {
         id: user.id.to_string(),
@@ -69,7 +73,7 @@ fn get_claims(user: &User) -> Claims {
     }
 }
 
-fn add_time(now: i64, days: i64) -> usize {
-    let sixty_four = now + (days * 86400);
+fn add_time(from: i64, days: i64) -> usize {
+    let sixty_four = from + (days * 86400);
     sixty_four as usize
 }
