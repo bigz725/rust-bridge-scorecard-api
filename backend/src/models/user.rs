@@ -1,12 +1,18 @@
 use bcrypt::BcryptError;
-use mongodb::{bson::{DateTime, doc}, Client, Collection};
+use bson::{oid::ObjectId, serde_helpers::serialize_bson_datetime_as_rfc3339_string, Document};
+use mongodb::{
+    bson::{doc, DateTime},
+    Client, Collection,
+};
 use serde::{Deserialize, Serialize};
-use bson::{serde_helpers::serialize_bson_datetime_as_rfc3339_string, oid::ObjectId, Document};
+use std::{
+    fmt::{Display, Formatter, Result as FmtResult},
+    str::FromStr,
+};
 use tokio_stream::StreamExt;
-use std::fmt::{Display, Formatter, Result as FmtResult};
 use tracing::warn;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct User {
     // #[serde(serialize_with = "serialize_hex_string_as_object_id")]
     #[serde(rename = "_id")]
@@ -17,33 +23,51 @@ pub struct User {
     pub email: String,
     pub roles: Vec<Role>,
 
-    #[serde(serialize_with = "serialize_bson_datetime_as_rfc3339_string", rename = "createdAt")]
+    #[serde(
+        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
+        rename = "createdAt"
+    )]
     pub created_at: DateTime,
-    #[serde(serialize_with = "serialize_bson_datetime_as_rfc3339_string", rename = "updatedAt")]
+    #[serde(
+        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
+        rename = "updatedAt"
+    )]
     pub updated_at: DateTime,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct NewUser {
     pub username: String,
     pub password: String,
-    pub  salt: String,
+    pub salt: String,
     pub email: String,
     pub roles: Vec<Role>,
-    #[serde(serialize_with = "serialize_bson_datetime_as_rfc3339_string", rename = "createdAt")]
+    #[serde(
+        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
+        rename = "createdAt"
+    )]
     pub created_at: DateTime,
-    #[serde(serialize_with = "serialize_bson_datetime_as_rfc3339_string", rename = "createdAt")]
+    #[serde(
+        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
+        rename = "createdAt"
+    )]
     pub updated_at: DateTime,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Role {
     #[serde(rename = "_id")]
     pub id: ObjectId,
     pub name: String,
-    #[serde(serialize_with = "serialize_bson_datetime_as_rfc3339_string", rename = "createdAt")]
+    #[serde(
+        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
+        rename = "createdAt"
+    )]
     pub created_at: DateTime,
-    #[serde(serialize_with = "serialize_bson_datetime_as_rfc3339_string", rename = "updatedAt")]
+    #[serde(
+        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
+        rename = "updatedAt"
+    )]
     pub updated_at: DateTime,
 }
 
@@ -65,22 +89,49 @@ impl Display for Role {
 
 impl Display for User {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "({}, {}, {}, {},)", self.id, self.username, self.email, self.created_at)
+        write!(
+            f,
+            "({}, {}, {}, {},)",
+            self.id, self.username, self.email, self.created_at
+        )
     }
 }
 
 impl core::fmt::Display for UserError {
-	fn fmt(&self, fmt: &mut core::fmt::Formatter,) -> core::result::Result<(), core::fmt::Error> {
-		write!(fmt, "{self:?}")
-	}
+    fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::result::Result<(), core::fmt::Error> {
+        write!(fmt, "{self:?}")
+    }
 }
 
 pub async fn find_user_by_username(db: &Client, username: &str) -> Result<User, UserError> {
     let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
-    let mut results  = users.aggregate([
-            stage_lookup_user(username),
-            stage_lookup_roles(),], None
-    ).await?;
+    let pipeline = vec![
+        stage_lookup_user_by_username(username),
+        stage_lookup_roles(),
+    ];
+    //info!("pipeline: {:?}", pipeline);
+    do_aggregation(users, pipeline).await
+}
+
+pub async fn find_by_user_id_and_salt(
+    db: &Client,
+    user_id: &str,
+    salt: &str,
+) -> Result<User, UserError> {
+    let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
+    let pipeline = vec![
+        stage_lookup_by_user_id_and_salt(user_id, salt),
+        stage_lookup_roles(),
+    ];
+    //info!("pipeline: {:?}", pipeline);
+    do_aggregation(users, pipeline).await
+}
+
+async fn do_aggregation(
+    users: Collection<User>,
+    pipeline: Vec<Document>,
+) -> Result<User, UserError> {
+    let mut results = users.aggregate(pipeline, None).await?;
 
     let result = results.try_next().await?;
     if let Some(result) = result {
@@ -88,14 +139,22 @@ pub async fn find_user_by_username(db: &Client, username: &str) -> Result<User, 
         let user: User = bson::from_bson(doc)?;
         Ok(user)
     } else {
-        warn!("User {} not found", username);
+        warn!("User not found");
         Err(UserError::UserNotFound)
     }
 }
 
+fn stage_lookup_by_user_id_and_salt(user_id: &str, salt: &str) -> Document {
+    doc! {
+        "$match": doc! {
+            "_id": ObjectId::from_str(user_id).unwrap(),
+            "salt": &(salt),
+        }
+    }
+}
 
-fn stage_lookup_user(username: &str) -> Document {
-    doc!{
+fn stage_lookup_user_by_username(username: &str) -> Document {
+    doc! {
         "$match": doc! {
             "username": &(username),
         }
