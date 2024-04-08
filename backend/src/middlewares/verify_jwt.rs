@@ -1,14 +1,14 @@
 use axum::{
     async_trait,
     body::Body,
-    extract::{FromRequestParts, Request},
+    extract::{FromRequestParts, Request, State},
     http::{request::Parts, StatusCode},
     middleware::Next,
     response::Response,
 };
-use jsonwebtoken::{decode, Validation};
+use jsonwebtoken::{decode, DecodingKey, Validation};
 
-use crate::auth::jwt::{Claims, KEYS};
+use crate::{auth::jwt::Claims, state::AppState};
 struct JWTDecryptError;
 
 pub struct BearerToken(String);
@@ -32,14 +32,16 @@ where
     }
 }
 
-#[tracing::instrument(skip(bearer_token, request, next))]
+#[tracing::instrument(skip(bearer_token, keys, request, next))]
 pub async fn get_claims_from_auth_token(
     bearer_token: BearerToken,
+    State(AppState{mongodb_client: _, keys}): State<AppState>,
     mut request: Request,
     next: Next,
 ) -> Response<Body> {
     let bearer_token = bearer_token.0.replace("Bearer ", "");
-    match get_claims(&bearer_token) {
+    let decoding_key = keys.decoding;
+    match get_claims(&bearer_token, &decoding_key) {
         Ok(claims) => {
             request.extensions_mut().insert::<Claims>(claims.clone());
             next.run(request).await
@@ -50,9 +52,9 @@ pub async fn get_claims_from_auth_token(
             .unwrap(),
     }
 }
-#[tracing::instrument(skip(token))]
-fn get_claims(token: &str) -> Result<Claims, JWTDecryptError> {
-    let decoded = decode::<Claims>(token, &KEYS.decoding, &Validation::default());
+#[tracing::instrument(skip(token, decoding_key))]
+fn get_claims(token: &str, decoding_key: &DecodingKey) -> Result<Claims, JWTDecryptError> {
+    let decoded = decode::<Claims>(token, decoding_key, &Validation::default());
 
     match decoded {
         Ok(claims) => Ok(claims.claims),

@@ -4,7 +4,7 @@ use tracing::{info, instrument};
 
 use crate::{
     middlewares::{lookup_user::lookup_user_from_token, verify_jwt::get_claims_from_auth_token},
-    AppState,
+    state::AppState,
 };
 
 #[instrument(name = "HelloWorldHandler")]
@@ -19,7 +19,7 @@ async fn protected_hello_world_handler() -> Json<Value> {
 }
 
 pub fn routes(state: &AppState) -> Router<AppState> {
-    let get_claims_layer = middleware::from_fn(get_claims_from_auth_token);
+    let get_claims_layer = middleware::from_fn_with_state(state.clone(), get_claims_from_auth_token);
     let lookup_user_layer = middleware::from_fn_with_state(state.clone(), lookup_user_from_token);
     Router::new()
         .route("/api/protected", get(protected_hello_world_handler))
