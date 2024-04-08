@@ -1,7 +1,7 @@
 use crate::{
     auth::jwt::{create_token, Claims},
     models::user::{find_user_by_username, Role, User, UserError, UserError::InvalidCredentials},
-    AppState, Error,
+    state::AppState, error::Error,
 };
 use axum::{extract::State, routing::post, Json, Router};
 use bcrypt::verify;
@@ -27,6 +27,7 @@ async fn login(
     payload: Json<LoginPayload>,
 ) -> Result<Json<Value>, Error> {
     let db = &(state.mongodb_client);
+    let keys = &state.keys;
 
     let user = find_user_by_username(db, &payload.username).await?;
     let verify_result =
@@ -34,7 +35,7 @@ async fn login(
 
     if verify_result {
         let claims = create_claims(&user);
-        let token = create_token(&claims);
+        let token = create_token(&claims, &keys.encoding);
         info!("User {} successfully logged in", user.username);
         let response = response(user, token);
 

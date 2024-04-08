@@ -7,18 +7,16 @@ use axum::{
     Extension,
 };
 
-use crate::{auth::jwt::Claims, models::user::find_by_user_id_and_salt, AppState};
+use crate::{auth::jwt::Claims, models::user::find_by_user_id_and_salt, state::AppState};
 
-#[tracing::instrument(skip(ext, state, next))]
+#[tracing::instrument(skip(claims, mongodb_client, request, next))]
 pub async fn lookup_user_from_token(
-    ext: Extension<Claims>,
-    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    State(AppState{ mongodb_client, keys: _}): State<AppState>,
     mut request: Request,
     next: Next,
 ) -> Response<Body> {
-    let db = state.mongodb_client;
-    let Extension(claims) = ext;
-    let user = find_by_user_id_and_salt(&db, &claims.id, &claims.salt).await;
+    let user = find_by_user_id_and_salt(&mongodb_client, &claims.id, &claims.salt).await;
     match user {
         Ok(user) => {
             tracing::info!("User {} successfully looked up", user.username);

@@ -1,5 +1,4 @@
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -10,13 +9,14 @@ pub struct Claims {
     pub exp: usize,
 }
 
+#[derive(Clone)]
 pub struct Keys {
     pub encoding: EncodingKey,
     pub decoding: DecodingKey,
 }
 
 impl Keys {
-    fn new(secret: &[u8]) -> Self {
+    pub fn new(secret: &[u8]) -> Self {
         Self {
             encoding: EncodingKey::from_secret(secret),
             decoding: DecodingKey::from_secret(secret),
@@ -24,13 +24,8 @@ impl Keys {
     }
 }
 
-pub static KEYS: Lazy<Keys> = Lazy::new(|| {
-    let secret = std::env::var("JWT_SECRET").unwrap_or("fortestingonly".to_string());
-    Keys::new(secret.as_bytes())
-});
-
-pub fn create_token(claims: &Claims) -> String {
-    encode(&Header::default(), &claims, &KEYS.encoding).unwrap_or_else(|_| {
+pub fn create_token(claims: &Claims, encoding_key: &EncodingKey) -> String {
+    encode(&Header::default(), &claims, encoding_key).unwrap_or_else(|_| {
         error!("Could not encode the token.");
         panic!("Could not encode the token.");
     })
