@@ -77,7 +77,7 @@ push:
   extends: .push_template
   script:
     - 'echo "Pushing images from $CACHE_TAG to $CURRENT_TAG." for branch build'
-    - docker buildx build --build-arg tag="$CI_PIPELINE_ID" --cache-from "$CACHE_TAG" --tag "$CURRENT_TAG" --push --platform=linux/arm64/v8,linux/amd64 .
+    - docker buildx build --build-arg tag="$CI_PIPELINE_ID" --cache-from "$CACHE_TAG" --tag "$CURRENT_TAG" --push --platform=linux/arm64/v8,linux/amd64 backend/.
 #---END BRANCH JOBS
 #---MAIN JOBS ----------
 
