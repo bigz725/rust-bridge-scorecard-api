@@ -31,7 +31,6 @@ RUN apt update -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/backend backend
-# COPY configuration configuration
-ENV APP_ENVIRONMENT production
+COPY configuration configuration
 
 ENTRYPOINT ["./backend"]
