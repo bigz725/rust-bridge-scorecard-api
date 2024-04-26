@@ -81,6 +81,7 @@ pub enum UserError {
     UserNotFound,
 }
 
+
 impl Display for Role {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "({}, {})", self.id, self.name)

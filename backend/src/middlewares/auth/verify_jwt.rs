@@ -4,12 +4,31 @@ use axum::{
     extract::{FromRequestParts, Request, State},
     http::{request::Parts, StatusCode},
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use jsonwebtoken::{decode, DecodingKey, Validation};
-
+use thiserror::Error;
 use crate::{auth::jwt::Claims, state::AppState};
+use std::fmt::Display;
+
+#[derive(Debug, Error)]
+
 struct JWTDecryptError;
+
+impl Display for JWTDecryptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Error decrypting JWT")
+    }
+}
+
+impl IntoResponse for JWTDecryptError {
+    fn into_response(self) -> Response<Body> {
+        Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .body("Unauthorized".into())
+            .unwrap()
+    }
+}
 
 pub struct BearerToken(String);
 
@@ -46,10 +65,10 @@ pub async fn get_claims_from_auth_token(
             request.extensions_mut().insert::<Claims>(claims.clone());
             next.run(request).await
         }
-        Err(_) => Response::builder()
-            .status(StatusCode::UNAUTHORIZED)
-            .body("Unauthorized".into())
-            .unwrap(),
+        Err(e) => {
+            tracing::error!("Error decoding JWT: {:?}", e);
+            e.into_response()
+        }
     }
 }
 #[tracing::instrument(skip(token, decoding_key))]
