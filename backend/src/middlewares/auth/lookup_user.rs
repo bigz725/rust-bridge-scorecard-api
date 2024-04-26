@@ -1,13 +1,12 @@
 use axum::{
     body::Body,
     extract::{Request, State},
-    http::StatusCode,
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
     Extension,
 };
 
-use crate::{auth::jwt::Claims, models::user::find_by_user_id_and_salt, state::AppState};
+use crate::{auth::jwt::Claims, models::user::find_by_user_id_and_salt, state::AppState, web::routes_login::LoginError};
 
 #[tracing::instrument(skip(claims, mongodb_client, request, next))]
 pub async fn lookup_user_from_token(
@@ -30,10 +29,7 @@ pub async fn lookup_user_from_token(
                 &claims.salt
             );
             tracing::error!("Error was: {:?}", err);
-            Response::builder()
-                .status(StatusCode::UNAUTHORIZED)
-                .body("Unauthorized".into())
-                .unwrap()
+            LoginError::from(err).into_response()
         }
     }
 }

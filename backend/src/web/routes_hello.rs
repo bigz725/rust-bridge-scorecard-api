@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use tracing::{info, instrument};
 
 use crate::{
-    middlewares::{lookup_user::lookup_user_from_token, verify_jwt::get_claims_from_auth_token},
+    middlewares::{auth::lookup_user::lookup_user_from_token, auth::verify_jwt::get_claims_from_auth_token},
     state::AppState,
 };
 

@@ -1,8 +1,19 @@
+use axum::{
+    body::Bytes,
+    extract::{MatchedPath, Request},
+    http::HeaderMap,
+    response::Response,
+    Router,
+};
 use tokio::task::JoinHandle;
-use tracing::{subscriber::set_global_default, Subscriber};
+
+use std::time::Duration;
+use tower_http::{classify::ServerErrorsFailureClass, trace::TraceLayer};
+use tracing::{info_span, subscriber::set_global_default, Span, Subscriber};
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
-use tracing_log::LogTracer;
 use tracing_subscriber::{fmt::MakeWriter, layer::SubscriberExt, EnvFilter, Registry};
+
+use crate::middlewares::request_id::RequestId;
 
 /// Compose multiple layers into a `tracing`'s subscriber.
 ///
@@ -40,7 +51,7 @@ where
 ///
 /// It should only be called once!
 pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
-    LogTracer::init().expect("Failed to set logger");
+    //LogTracer::init().expect("Failed to set logger");
     set_global_default(subscriber).expect("Failed to set subscriber");
 }
 
@@ -51,4 +62,49 @@ where
 {
     let current_span = tracing::Span::current();
     tokio::task::spawn_blocking(move || current_span.in_scope(f))
+}
+
+pub fn add_trace_layer(router: Router) -> Router {
+    router.layer(
+        TraceLayer::new_for_http()
+            .make_span_with(|request: &Request<_>| {
+                let matched_path = request
+                    .extensions()
+                    .get::<MatchedPath>()
+                    .map(MatchedPath::as_str);
+                let request_id = request
+                    .extensions()
+                    .get::<RequestId>()
+                    .map(|id| id.0.to_string());
+
+                info_span!(
+                    "request",
+                    method = ?request.method(),
+                    matched_path,
+                    request_id,
+                    some_other_field = tracing::field::Empty
+                )
+            })
+            .on_request(|_request: &Request<_>, _span: &Span| {
+                // You can use `_span.record("some_other_field", value)` in one of these
+                // closures to attach a value to the initially empty field in the info_span
+                // created above.
+            })
+            .on_response(|_response: &Response, _latency: Duration, _span: &Span| {
+                // ...
+            })
+            .on_body_chunk(|_chunk: &Bytes, _latency: Duration, _span: &Span| {
+                // ...
+            })
+            .on_eos(
+                |_trailers: Option<&HeaderMap>, _stream_duration: Duration, _span: &Span| {
+                    // ...
+                },
+            )
+            .on_failure(
+                |_error: ServerErrorsFailureClass, _latency: Duration, _span: &Span| {
+                    // ...
+                },
+            ),
+    )
 }

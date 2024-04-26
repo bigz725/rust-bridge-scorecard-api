@@ -1,9 +1,11 @@
 use tokio::net::TcpListener;
-use axum::{routing::IntoMakeService, Router};
+use axum::{middleware, Router};
+use axum::routing::IntoMakeService;
 use mongodb::Client;
 use secrecy::{ExposeSecret, Secret};
 
-use crate::{ auth::jwt::Keys, web::routes_hello, web::routes_login, configuration::{DatabaseSettings, Settings}, state::AppState, };
+use crate::middlewares::request_id::add_session_id;
+use crate::{ auth::jwt::Keys, configuration::{DatabaseSettings, Settings}, state::AppState, telemetry::add_trace_layer, web::{routes_hello, routes_login} };
 
 pub struct Application {
     pub port: u16,
@@ -52,10 +54,15 @@ async fn run(
         mongodb_client: db_conn,
         keys
     };
-    Router::new()
+
+
+    let router = Router::new()
     .merge(routes_hello::routes(&state))
     .merge(routes_login::routes())
-    .with_state(state)
+    .with_state(state);
+
+    add_trace_layer(router)
+    .layer(middleware::from_fn(add_session_id))
     .into_make_service()
 }
 

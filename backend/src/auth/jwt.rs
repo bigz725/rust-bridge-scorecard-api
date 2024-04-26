@@ -24,9 +24,10 @@ impl Keys {
     }
 }
 
-pub fn create_token(claims: &Claims, encoding_key: &EncodingKey) -> String {
-    encode(&Header::default(), &claims, encoding_key).unwrap_or_else(|_| {
-        error!("Could not encode the token.");
-        panic!("Could not encode the token.");
-    })
+pub fn create_token(claims: &Claims, encoding_key: &EncodingKey) -> Result<String, anyhow::Error> {
+    encode(&Header::default(), &claims, encoding_key)
+        .map_err(|e| {
+            error!("Error encoding token: {:?}", e);
+            anyhow::anyhow!("Error encoding token")
+        })
 }
