@@ -21,6 +21,12 @@ pub struct User {
     pub password: String,
     pub salt: String,
     pub email: String,
+    // !!! ATTENTION !!!
+    // When getting users from Mongodb, you must handle the roles.
+    // The find_user method does this through an aggregation pipeline.
+    // If you add another search method, you must handle the roles somehow.
+    // Otherwise, you will get a deserialization error, and it will complain
+    // about a missing "_id" field, but won't tell you it comes from the vec of roles. 
     pub roles: Vec<Role>,
 
     #[serde(
@@ -104,28 +110,14 @@ impl core::fmt::Display for UserError {
     }
 }
 
-pub async fn find_user_by_username(db: &Client, username: &str) -> Result<User, UserError> {
+pub async fn find_user(db: &Client, user_id: Option<&str>, username: Option<&str>, email: Option<&str>, salt: Option<&str>) -> Result<User, UserError> {
     let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
     let pipeline = vec![
-        stage_lookup_user_by_username(username),
+        stage_lookup_user(user_id, username, email, salt),
         stage_lookup_roles(),
     ];
-    //info!("pipeline: {:?}", pipeline);
     do_aggregation(users, pipeline).await
-}
 
-pub async fn find_by_user_id_and_salt(
-    db: &Client,
-    user_id: &str,
-    salt: &str,
-) -> Result<User, UserError> {
-    let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
-    let pipeline = vec![
-        stage_lookup_by_user_id_and_salt(user_id, salt),
-        stage_lookup_roles(),
-    ];
-    //info!("pipeline: {:?}", pipeline);
-    do_aggregation(users, pipeline).await
 }
 
 async fn do_aggregation(
@@ -145,20 +137,22 @@ async fn do_aggregation(
     }
 }
 
-fn stage_lookup_by_user_id_and_salt(user_id: &str, salt: &str) -> Document {
-    doc! {
-        "$match": doc! {
-            "_id": ObjectId::from_str(user_id).unwrap(),
-            "salt": &(salt),
-        }
+fn stage_lookup_user(user_id: Option<&str>, username: Option<&str>, email: Option<&str>, salt: Option<&str>) -> Document {
+    let mut filter = doc! {};
+    if let Some(user_id) = user_id {
+        filter.insert("_id", ObjectId::from_str(user_id).unwrap());
     }
-}
-
-fn stage_lookup_user_by_username(username: &str) -> Document {
+    if let Some(username) = username {
+        filter.insert("username", username);
+    }
+    if let Some(email) = email {
+        filter.insert("email", email);
+    }
+    if let Some(salt) = salt {
+        filter.insert("salt", salt);
+    }
     doc! {
-        "$match": doc! {
-            "username": &(username),
-        }
+        "$match": filter
     }
 }
 

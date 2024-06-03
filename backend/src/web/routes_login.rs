@@ -1,6 +1,6 @@
 use crate::{
     auth::jwt::{create_token, Claims},
-    models::user::{find_user_by_username, Role, User, UserError, UserError::InvalidCredentials},
+    models::user::{find_user, Role, User, UserError::{self, InvalidCredentials}},
     state::AppState, 
 };
 use axum::{body::Body, extract::State, response::{IntoResponse, Response}, routing::post, Json, Router};
@@ -58,7 +58,8 @@ async fn login(
     State(AppState{mongodb_client: db, keys}): State<AppState>,
     payload: Json<LoginPayload>,
 ) -> Result<Json<Value>, LoginError> {
-    let user = find_user_by_username(&db, &payload.username).await?;
+    //find_user(db: &Client, user_id: Option<&str>, username: Option<&str>, email: Option<&str>, salt: Option<&str>)
+    let user = find_user(&db, None, Some(&payload.username), None, None).await?;
     let verify_result =
         verify(&payload.password, &user.password).map_err(UserError::BadDecryption)?;
 
