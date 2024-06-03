@@ -16,12 +16,12 @@ name = "backend"
 anyhow = "1.0.81"
 axum = {version = "0.7.4"}
 bcrypt = {version="0.15.0", features=["alloc"]}
-bson = "2.7.0"
+bson = "2.10.0"
 chrono = "0.4.31"
 config = "0.14.0"
 dotenv = "0.15.0"
 jsonwebtoken = "9.1.0"
-mongodb = {version="2.7.1", features=["tracing-unstable"]}
+mongodb = {version="2.8.2", features=["tracing-unstable"]}
 secrecy = { version = "0.8.0", features = ["serde"] }
 serde = {version = "1.0.196", features = ["derive"]}
 serde-aux = "4.5.0"

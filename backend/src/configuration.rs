@@ -96,7 +96,7 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
 impl DatabaseSettings {
     pub async fn with_db(&self) -> ClientOptions {
         let mut client_options = self.without_db().await;
-        client_options.default_database = self.database_name.clone();
+        client_options.default_database.clone_from(&self.database_name);
         client_options
     }
 
@@ -106,10 +106,10 @@ impl DatabaseSettings {
                 self.host, self.port
         );
         let mut client_options = ClientOptions::parse(uri).await.unwrap();
-        client_options.app_name = self.app_name.clone();
+        client_options.app_name.clone_from(&self.app_name);
         client_options.min_pool_size = self.min_pool_size;
         client_options.max_pool_size = self.max_pool_size;
-        client_options.default_database = self.database_name.clone();
+        client_options.default_database.clone_from(&self.database_name);
 
         client_options
     }
