@@ -1,20 +1,18 @@
+use async_graphql::SimpleObject;
 use bcrypt::BcryptError;
-use bson::{oid::ObjectId, serde_helpers::serialize_bson_datetime_as_rfc3339_string, Document};
+use bson::{oid::ObjectId, serde_helpers::serialize_bson_datetime_as_rfc3339_string, Bson, Document};
 use mongodb::{
     bson::{doc, DateTime},
     Client, Collection,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::{Display, Formatter, Result as FmtResult},
-    str::FromStr,
+use std::{fmt::{Display, Formatter, Result as FmtResult}, str::FromStr
 };
-use tokio_stream::StreamExt;
-use tracing::warn;
+//use tokio_stream::StreamExt;
+use futures::stream::TryStreamExt;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject)]
 pub struct User {
-    // #[serde(serialize_with = "serialize_hex_string_as_object_id")]
     #[serde(rename = "_id")]
     pub id: ObjectId,
     pub username: String,
@@ -26,16 +24,17 @@ pub struct User {
     // The find_user method does this through an aggregation pipeline.
     // If you add another search method, you must handle the roles somehow.
     // Otherwise, you will get a deserialization error, and it will complain
-    // about a missing "_id" field, but won't tell you it comes from the vec of roles. 
+    // about a missing "_id" field, but won't tell you it comes from the vec of roles.
+    #[serde(skip_serializing)]
     pub roles: Vec<Role>,
 
     #[serde(
-        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
+        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
         rename = "createdAt"
     )]
     pub created_at: DateTime,
     #[serde(
-        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
+        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
         rename = "updatedAt"
     )]
     pub updated_at: DateTime,
@@ -49,18 +48,18 @@ pub struct NewUser {
     pub email: String,
     pub roles: Vec<Role>,
     #[serde(
-        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
+        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
         rename = "createdAt"
     )]
     pub created_at: DateTime,
     #[serde(
-        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "createdAt"
+        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
+        rename = "updatedAt"
     )]
     pub updated_at: DateTime,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject)]
 pub struct Role {
     #[serde(rename = "_id")]
     pub id: ObjectId,
@@ -80,13 +79,13 @@ pub struct Role {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum UserError {
+    NoDbConnectionError,
     QueryError(#[from] mongodb::error::Error),
     InvalidUserRecord(#[from] bson::de::Error),
     BadDecryption(#[from] BcryptError),
     InvalidCredentials,
     UserNotFound,
 }
-
 
 impl Display for Role {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
@@ -110,34 +109,86 @@ impl core::fmt::Display for UserError {
     }
 }
 
-pub async fn find_user(db: &Client, user_id: Option<&str>, username: Option<&str>, email: Option<&str>, salt: Option<&str>) -> Result<User, UserError> {
+impl From<User> for Bson {
+    fn from(user: User) -> Bson {
+        bson::to_bson(&user).unwrap()
+    }
+}
+
+#[tracing::instrument(target = "database", skip(db))]
+pub async fn all_users(db: &Client) -> Result<Vec<User>, UserError> {
+    let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
+    let pipeline = vec![
+        stage_lookup_roles(),
+    ];
+    do_vec_aggregation(users, pipeline).await
+}
+
+#[tracing::instrument(target = "database", skip(db))]
+pub async fn find_user(
+    db: &Client,
+    user_id: Option<&str>,
+    username: Option<&str>,
+    email: Option<&str>,
+    salt: Option<&str>,
+) -> Result<Vec<User>, UserError> {
     let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
     let pipeline = vec![
         stage_lookup_user(user_id, username, email, salt),
         stage_lookup_roles(),
     ];
-    do_aggregation(users, pipeline).await
-
+    do_vec_aggregation(users, pipeline).await
 }
 
-async fn do_aggregation(
+pub async fn save_user(db: &Client, user: NewUser) -> Result<(), UserError> {
+    let users: Collection<NewUser> = db.database("bridge_scorecard_api").collection("users");
+    users.insert_one(user, None).await?;
+    Ok(())
+}
+
+pub async fn update_user(db: &Client, user: &User) -> Result<(), UserError> {
+    let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
+    users.update_one(
+        doc! {"_id": user.id},
+        doc! {"$set": user},
+        None,
+    )
+    .await?;
+    Ok(())
+}
+
+#[tracing::instrument(target = "database", skip(users), level = "trace")]
+async fn do_vec_aggregation(
     users: Collection<User>,
     pipeline: Vec<Document>,
-) -> Result<User, UserError> {
-    let mut results = users.aggregate(pipeline, None).await?;
+) -> Result<Vec<User>, UserError> {
+    let mut cursor = users.aggregate(pipeline, None).await?;
+    let mut results: Vec<User> = Vec::new();
 
-    let result = results.try_next().await?;
-    if let Some(result) = result {
-        let doc = bson::from_document(result)?;
-        let user: User = bson::from_bson(doc)?;
-        Ok(user)
-    } else {
-        warn!("User not found");
-        Err(UserError::UserNotFound)
+    while let Some(document) = cursor.try_next().await? {
+        let bson = bson::from_document(document)
+            .map_err(|e| {
+                tracing::error!("Error in from_document: {:?}", e);
+                e
+            })?;
+        tracing::info!("{:?}", bson);
+        let user: User = bson::from_bson(bson)
+            .map_err(|e| {
+                tracing::error!("Error in from_bson: {:?}", e);
+                e
+            })?;
+        results.push(user);
     }
+    Ok(results)
+    
 }
 
-fn stage_lookup_user(user_id: Option<&str>, username: Option<&str>, email: Option<&str>, salt: Option<&str>) -> Document {
+fn stage_lookup_user(
+    user_id: Option<&str>,
+    username: Option<&str>,
+    email: Option<&str>,
+    salt: Option<&str>,
+) -> Document {
     let mut filter = doc! {};
     if let Some(user_id) = user_id {
         filter.insert("_id", ObjectId::from_str(user_id).unwrap());

@@ -9,17 +9,11 @@ use axum::{
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use thiserror::Error;
 use crate::{auth::jwt::Claims, state::AppState};
-use std::fmt::Display;
 
 #[derive(Debug, Error)]
+#[error("Error decrypting JWT")]
 
-struct JWTDecryptError;
-
-impl Display for JWTDecryptError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Error decrypting JWT")
-    }
-}
+pub struct JWTDecryptError;
 
 impl IntoResponse for JWTDecryptError {
     fn into_response(self) -> Response<Body> {
@@ -30,7 +24,7 @@ impl IntoResponse for JWTDecryptError {
     }
 }
 
-pub struct BearerToken(String);
+pub struct BearerToken(pub String);
 
 #[async_trait]
 impl<S> FromRequestParts<S> for BearerToken
@@ -72,7 +66,7 @@ pub async fn get_claims_from_auth_token(
     }
 }
 #[tracing::instrument(skip(token, decoding_key))]
-fn get_claims(token: &str, decoding_key: &DecodingKey) -> Result<Claims, JWTDecryptError> {
+pub fn get_claims(token: &str, decoding_key: &DecodingKey) -> Result<Claims, JWTDecryptError> {
     let decoded = decode::<Claims>(token, decoding_key, &Validation::default());
 
     match decoded {

@@ -7,12 +7,12 @@ use crate::{
     state::AppState,
 };
 
-#[instrument(name = "HelloWorldHandler")]
+#[instrument(target="routes",name = "HelloWorldHandler")]
 async fn hello_world_handler() -> Json<Value> {
     info!("Hello_world_handler");
     Json(json!({"message": "Hello, World!"}))
 }
-#[instrument(name = "ProtectedHelloWorldHandler")]
+#[instrument(target="routes",name = "ProtectedHelloWorldHandler")]
 async fn protected_hello_world_handler() -> Json<Value> {
     info!("Protected_hello_world_handler");
     Json(json!({"message": "Hello, World!  You are authenticated!"}))

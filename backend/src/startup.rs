@@ -5,7 +5,10 @@ use mongodb::Client;
 use secrecy::{ExposeSecret, Secret};
 
 use crate::middlewares::request_id::add_session_id;
-use crate::{ auth::jwt::Keys, configuration::{DatabaseSettings, Settings}, state::AppState, telemetry::add_trace_layer, web::{routes_hello, routes_login, routes_user} };
+
+
+use crate::{ auth::jwt::Keys, configuration::{DatabaseSettings, Settings}, state::AppState, telemetry::add_trace_layer, web::{routes_hello, routes_login, routes_user, routes_graphql, routes_logout} };
+
 
 pub struct Application {
     pub port: u16,
@@ -59,7 +62,9 @@ async fn run(
     let router = Router::new()
     .merge(routes_hello::routes(&state))
     .merge(routes_login::routes())
+    .merge(routes_graphql::routes(&state))
     .merge(routes_user::routes(&state))
+    .merge(routes_logout::routes(&state))
     .with_state(state);
 
     add_trace_layer(router)
