@@ -1,9 +1,8 @@
 use axum::{extract::State, middleware, routing::post, Json, Router};
 use serde_json::{json, Value};
-use crate::{middlewares::auth::{lookup_user::lookup_user_from_token, verify_jwt::get_claims_from_auth_token}, models::user::find_user, state::AppState};
+use crate::{auth::login::LoginError,middlewares::auth::{lookup_user::lookup_user_from_token, verify_jwt::get_claims_from_auth_token}, models::user::find_user, state::AppState};
 use serde::Deserialize;
 
-use super::routes_login::LoginError;
 
 #[derive(Debug, Deserialize)]
 struct UserSearchPayload {
