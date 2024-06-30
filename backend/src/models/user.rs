@@ -142,7 +142,7 @@ pub async fn find_user(
 
 pub async fn save_user(db: &Client, user: NewUser) -> Result<(), UserError> {
     let users: Collection<NewUser> = db.database("bridge_scorecard_api").collection("users");
-    users.insert_one(user, None).await?;
+    users.insert_one(user).await?;
     Ok(())
 }
 
@@ -151,7 +151,6 @@ pub async fn update_user(db: &Client, user: &User) -> Result<(), UserError> {
     users.update_one(
         doc! {"_id": user.id},
         doc! {"$set": user},
-        None,
     )
     .await?;
     Ok(())
@@ -162,7 +161,7 @@ async fn do_vec_aggregation(
     users: Collection<User>,
     pipeline: Vec<Document>,
 ) -> Result<Vec<User>, UserError> {
-    let mut cursor = users.aggregate(pipeline, None).await?;
+    let mut cursor = users.aggregate(pipeline).await?;
     let mut results: Vec<User> = Vec::new();
 
     while let Some(document) = cursor.try_next().await? {
