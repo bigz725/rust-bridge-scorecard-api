@@ -1,4 +1,4 @@
-use axum::{extract::State, middleware, routing::post, Json, Router};
+use axum::{debug_handler, extract::State, middleware, routing::post, Json, Router};
 use serde_json::{json, Value};
 use crate::{auth::login::LoginError,middlewares::auth::{lookup_user::lookup_user_from_token, verify_jwt::get_claims_from_auth_token}, models::user::find_user, state::AppState};
 use serde::Deserialize;
@@ -20,8 +20,9 @@ pub fn routes(state: &AppState) -> Router<AppState> {
          .route_layer(get_claims_layer)
         
 }
-//find_user(db: &Client, user_id: Option<&str>, username: Option<&str>, email: Option<&str>, salt: Option<&str>)
+
 #[tracing::instrument(skip(db))]
+#[debug_handler]
 async fn user_search(
     State(AppState{mongodb_client: db, keys: _}): State<AppState>,
     payload: Json<UserSearchPayload>,
