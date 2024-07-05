@@ -1,4 +1,4 @@
-use axum::{middleware, routing::get, Json, Router};
+use axum::{debug_handler, middleware, routing::get, Json, Router};
 use serde_json::{json, Value};
 use tracing::{info, instrument};
 
@@ -8,11 +8,14 @@ use crate::{
 };
 
 #[instrument(target="routes",name = "HelloWorldHandler")]
+#[debug_handler]
 async fn hello_world_handler() -> Json<Value> {
     info!("Hello_world_handler");
     Json(json!({"message": "Hello, World!"}))
 }
+
 #[instrument(target="routes",name = "ProtectedHelloWorldHandler")]
+#[debug_handler]
 async fn protected_hello_world_handler() -> Json<Value> {
     info!("Protected_hello_world_handler");
     Json(json!({"message": "Hello, World!  You are authenticated!"}))

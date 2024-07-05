@@ -16,7 +16,7 @@ name = "backend"
 anyhow = "1.0.86"
 async-graphql = {version="7.0.6", features=["bson","chrono","tracing","url","uuid", "graphiql", ]}
 async-graphql-axum = "7.0.6"
-axum = {version = "0.7.5"}
+axum = {version = "0.7.5", features=["macros"]}
 base64 = "0.22.1"
 bcrypt = {version="0.15.1", features=["alloc"]}
 bson = "2.10.0"

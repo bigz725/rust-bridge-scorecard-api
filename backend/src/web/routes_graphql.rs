@@ -1,6 +1,6 @@
 use async_graphql::{extensions::Tracing, http::GraphiQLSource, EmptySubscription, Schema};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{body::Body, extract::{Request, State}, middleware::Next, response::{self, IntoResponse, Response}, routing::get, Extension, Router};
+use axum::{body::Body, debug_handler, extract::{Request, State}, middleware::Next, response::{self, IntoResponse, Response}, routing::get, Extension, Router};
 use axum::middleware;
 use crate::{auth::{jwt::Claims, login::LoginError}, graphql::user::{Mutation, Query}, middlewares::auth::verify_jwt::{get_claims, BearerToken}, models::user::{find_user, User, UserError}, state::AppState};
 
@@ -14,7 +14,8 @@ async fn graphiql() -> impl IntoResponse {
             .finish(),
     )
 }
-
+#[tracing::instrument(skip(db, keys, maybe_user, token, req))]
+#[debug_handler]
 async fn graphql_handler(
     State(AppState{mongodb_client: db, keys}): State<AppState>, 
     Extension(maybe_user): Extension<Option<User>>,
@@ -24,7 +25,7 @@ async fn graphql_handler(
     let schema = Schema::build(Query, Mutation, EmptySubscription)
         .data(db.clone())
         .data(keys.clone())
-        .data(maybe_user.to_owned())
+        .data(maybe_user.clone())
         .data(token)
         .extension(Tracing)
         .finish();

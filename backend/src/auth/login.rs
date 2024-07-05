@@ -98,7 +98,7 @@ pub async fn login(
     keys: &Keys,
     payload: LoginPayload,
 ) -> Result<LoginResponse, LoginError> {
-    //find_user(db: &Client, user_id: Option<&str>, username: Option<&str>, email: Option<&str>, salt: Option<&str>)
+    
     let users = find_user(db, None, Some(&payload.username), None, None).await?;
     if users.len() > 1 {
         tracing::warn!("Multiple users found with username {}", payload.username);

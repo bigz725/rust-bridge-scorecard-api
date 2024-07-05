@@ -2,13 +2,15 @@ use crate::{
     auth::login::{login, LoginError, LoginPayload},
     state::AppState,
 };
-use axum::{extract::Json, extract::State, routing::post, Router};
+use axum::{debug_handler, extract::{Json, State}, routing::post, Router};
 use serde_json::{json, Value};
 
 pub fn routes() -> Router<AppState> {
     Router::new().route("/api/auth/signin", post(handle_login))
 }
 
+#[tracing::instrument(skip(db, keys, payload))]
+#[debug_handler]
 async fn handle_login(
     State(AppState {
         mongodb_client: db,
