@@ -82,7 +82,9 @@ pub fn add_trace_layer(router: Router) -> Router {
                     method = ?request.method(),
                     matched_path,
                     request_id,
-                    some_other_field = tracing::field::Empty
+                    response_code = tracing::field::Empty,
+                    error_code = tracing::field::Empty,
+                    error_message = tracing::field::Empty,
                 )
             })
             .on_request(|_request: &Request<_>, _span: &Span| {
@@ -90,8 +92,8 @@ pub fn add_trace_layer(router: Router) -> Router {
                 // closures to attach a value to the initially empty field in the info_span
                 // created above.
             })
-            .on_response(|_response: &Response, _latency: Duration, _span: &Span| {
-                // ...
+            .on_response(|response: &Response, _latency: Duration, span: &Span| {
+                span.record("response_code", response.status().as_str());
             })
             .on_body_chunk(|_chunk: &Bytes, _latency: Duration, _span: &Span| {
                 // ...
@@ -102,8 +104,16 @@ pub fn add_trace_layer(router: Router) -> Router {
                 },
             )
             .on_failure(
-                |_error: ServerErrorsFailureClass, _latency: Duration, _span: &Span| {
-                    // ...
+                |error: ServerErrorsFailureClass, _latency: Duration, span: &Span| {
+                    tracing::error!("Request failed.");
+                    match error {
+                        ServerErrorsFailureClass::StatusCode(status_code) => {
+                            span.record("error_code", &status_code.as_u16().to_string());
+                        }
+                        ServerErrorsFailureClass::Error(error) => {
+                            span.record("error_message", error.to_string());
+                        }
+                    }
                 },
             ),
     )
