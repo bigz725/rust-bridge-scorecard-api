@@ -1,7 +1,9 @@
 application:
   port: 4040
+  host: 127.0.0.1
   hmac_secret: "for_testing_only_sdfsdf_sdwetergrtbfb_ert343454tergdfggergergergergwsdfwefqwedqwedsdvergerg3e4wt34werwefwe"
   jwt_secret: "for_testing_only_sdfsdf_sdwetergrtbfb_ert343454tergdfggergergergergwsdfwefqwedqwedsdvergerg3e4wt34werwefwe"
+  base_url: "http://127.0.0.1"
 database:
   host: "staging.local.zkissane.com"
   port: 27017
@@ -10,6 +12,7 @@ database:
   app_name: "rust_bridge_scorecard_api"
   min_pool_size: 5
   max_pool_size: 10
+  require_ssl: false
   username: 
   password: 
 redis_uri: "redis://127.0.0.1:6379"
