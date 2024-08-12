@@ -7,6 +7,7 @@ use secrecy::{ExposeSecret, Secret};
 use crate::middlewares::request_id::add_session_id;
 
 
+use crate::web::{routes_session, routes_user_session};
 use crate::{ auth::jwt::Keys, configuration::{DatabaseSettings, Settings}, state::AppState, telemetry::add_trace_layer, web::{routes_hello, routes_login, routes_user, routes_graphql, routes_logout} };
 
 
@@ -65,6 +66,8 @@ async fn run(
     .merge(routes_graphql::routes(&state))
     .merge(routes_user::routes(&state))
     .merge(routes_logout::routes(&state))
+    .merge(routes_user_session::routes(&state))
+    .merge(routes_session::routes())
     .with_state(state);
 
     add_trace_layer(router)
