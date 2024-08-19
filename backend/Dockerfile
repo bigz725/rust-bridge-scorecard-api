@@ -1,4 +1,4 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1.75.0 as chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.80.1 as chef
 WORKDIR /app
 RUN apt update && apt install lld clang -y
 
@@ -10,13 +10,15 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+#RUN cargo chef cook --release --recipe-path recipe.json
 
 # Copy all files from our working environment to the image
 COPY . .
 
 ENV SQLX_OFFLINE true
 # Build the project
+
+RUN cargo update axum tower tower-layer
 RUN cargo build --release --bin backend
 
 # next debian release name is trixie, so make the next line

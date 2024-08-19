@@ -108,7 +108,7 @@ pub fn add_trace_layer(router: Router) -> Router {
                     tracing::error!("Request failed.");
                     match error {
                         ServerErrorsFailureClass::StatusCode(status_code) => {
-                            span.record("error_code", &status_code.as_u16().to_string());
+                            span.record("error_code", status_code.as_u16().to_string());
                         }
                         ServerErrorsFailureClass::Error(error) => {
                             span.record("error_message", error.to_string());
