@@ -1,6 +1,5 @@
-use mongodb::options::ClientOptions;
-use secrecy::Secret;
-use serde_aux::field_attributes::deserialize_number_from_string;
+use secrecy::{ExposeSecret, Secret};
+use sqlx::postgres::{PgConnectOptions, PgSslMode};
 
 #[derive(serde::Deserialize, Clone)]
 pub struct Settings {
@@ -9,18 +8,28 @@ pub struct Settings {
     pub redis_uri: Secret<String>,
 }
 
+//TODO: explore this as a way to handle either URL based connection parameters
+// or explicit credentials
+// Read this: https://serde.rs/enum-representations.html
+//
+// #[derive(serde::Deserialize, serde::Serialize, Clone)]
+// #[serde(untagged)]
+// pub enum DatabaseConnectionType {
+//     Url{url: String},
+//     Credentials{username: String, password: String, host: String, port: u16},
+// }
+
+
 #[derive(serde::Deserialize, Clone)]
 pub struct DatabaseSettings {
     pub username: Option<String>,
     pub password: Option<Secret<String>>,
     pub host: String,
+    pub port: u16,
+    pub database_name: String,
     pub min_pool_size: Option<u32>,
     pub max_pool_size: Option<u32>,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub port: u16,
-    pub app_name: Option<String>,
-    pub database_name: Option<String>,
-    pub tls: bool,
+    pub require_ssl: bool,
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -94,24 +103,24 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
 }
 
 impl DatabaseSettings {
-    pub async fn with_db(&self) -> ClientOptions {
-        let mut client_options = self.without_db().await;
-        client_options.default_database.clone_from(&self.database_name);
+    pub async fn with_db(&self) -> PgConnectOptions {
+        let client_options = self.without_db().await.database(&self.database_name).to_owned();
         client_options
     }
 
-    pub async fn without_db(&self) -> ClientOptions {
-        let uri = format!(
-            "mongodb://{}:{}/",
-                self.host, self.port
-        );
-        let mut client_options = ClientOptions::parse(uri).await.unwrap();
-        client_options.app_name.clone_from(&self.app_name);
-        client_options.min_pool_size = self.min_pool_size;
-        client_options.max_pool_size = self.max_pool_size;
-        client_options.default_database.clone_from(&self.database_name);
+    pub async fn without_db(&self) -> PgConnectOptions {
+        let ssl_mode = if self.require_ssl {
+            PgSslMode::Require
+        } else {
+            PgSslMode::Prefer
+        };
 
-        client_options
+        PgConnectOptions::new()
+            .host(&self.host)
+            .port(self.port)
+            .username(self.username.as_deref().unwrap_or("postgres"))
+            .password(self.password.as_ref().unwrap().expose_secret())
+            .ssl_mode(ssl_mode)
     }
 }
 

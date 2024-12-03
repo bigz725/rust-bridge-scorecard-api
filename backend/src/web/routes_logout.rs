@@ -17,7 +17,7 @@ pub fn routes(state: &AppState) -> Router<AppState> {
 #[debug_handler]
 async fn handle_logout(
         State(AppState {
-        mongodb_client: db,
+        db_conn: db,
         keys: _,
     }): State<AppState>,    
         request: Request,) -> Result<Json<Value>, LogoutError> {

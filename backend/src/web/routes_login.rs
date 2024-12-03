@@ -13,7 +13,7 @@ pub fn routes() -> Router<AppState> {
 #[debug_handler]
 async fn handle_login(
     State(AppState {
-        mongodb_client: db,
+        db_conn: db,
         keys,
     }): State<AppState>,
     Json(payload): Json<LoginPayload>,

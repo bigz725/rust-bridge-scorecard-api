@@ -89,7 +89,7 @@ pub fn routes(state: &AppState) -> Router<AppState> {
 async fn session_search(
     Path(user_id): Path<String>,
     State(AppState {
-        mongodb_client: db,
+        db_conn: db,
         keys: _,
     }): State<AppState>,
     Json(payload): Json<SessionSearchPayload>,
@@ -105,7 +105,7 @@ async fn create_session_handler(
     Path(user_id): Path<String>,
     Extension(claims): Extension<Claims>,
     State(AppState {
-        mongodb_client: db,
+        db_conn: db,
         keys: _,
     }): State<AppState>,
     Json(payload): Json<NewSessionDTO>,
@@ -124,7 +124,7 @@ async fn update_session_handler(
     Path((user_id, session_id)): Path<(String, String)>,
     Extension(claims): Extension<Claims>,
     State(AppState {
-        mongodb_client: db,
+        db_conn: db,
         keys: _,
     }): State<AppState>,
     Json(payload): Json<SessionUpdateDTO>,

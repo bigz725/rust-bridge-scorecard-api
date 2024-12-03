@@ -13,9 +13,9 @@ use axum::{
 };
 use bcrypt::verify;
 use chrono::Utc;
-use mongodb::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sqlx::PgPool;
 
 use super::jwt::Keys;
 #[derive(thiserror::Error, Debug)]
@@ -94,7 +94,7 @@ impl IntoResponse for LoginError {
 
 #[tracing::instrument(target = "login", skip(db, keys, payload))]
 pub async fn login(
-    db: &Client,
+    db: &PgPool,
     keys: &Keys,
     payload: LoginPayload,
 ) -> Result<LoginResponse, LoginError> {

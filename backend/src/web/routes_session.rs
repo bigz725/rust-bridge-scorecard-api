@@ -22,7 +22,7 @@ pub fn routes() -> Router<AppState> {
 #[debug_handler]
 async fn session_search(
     State(AppState {
-        mongodb_client: db,
+        db_conn: db,
         keys: _,
     }): State<AppState>,
 ) -> Result<Json<Value>, SessionWebError> {

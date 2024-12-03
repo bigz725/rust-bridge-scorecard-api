@@ -1,20 +1,17 @@
 use async_graphql::SimpleObject;
 use bcrypt::BcryptError;
-use bson::{oid::ObjectId, serde_helpers::serialize_bson_datetime_as_rfc3339_string, Bson, Document};
-use mongodb::{
-    bson::{doc, DateTime},
-    Client, Collection,
-};
+use chrono::{Utc, DateTime};
+use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use std::{fmt::{Display, Formatter, Result as FmtResult}, str::FromStr
 };
+use sqlx::PgPool;
 //use tokio_stream::StreamExt;
-use futures::stream::TryStreamExt;
 
 #[derive(Debug, Deserialize, Serialize, Clone, SimpleObject)]
 pub struct User {
     #[serde(rename = "_id")]
-    pub id: ObjectId,
+    pub id: Uuid,
     pub username: String,
     pub password: String,
     pub salt: String,
@@ -28,16 +25,8 @@ pub struct User {
     #[serde(skip_serializing)]
     pub roles: Vec<Role>,
 
-    #[serde(
-        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "createdAt"
-    )]
-    pub created_at: DateTime,
-    #[serde(
-        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "updatedAt"
-    )]
-    pub updated_at: DateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -51,29 +40,21 @@ pub struct NewUser {
         //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
         rename = "createdAt"
     )]
-    pub created_at: DateTime,
+    pub created_at: DateTime<Utc>,
     #[serde(
         //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
         rename = "updatedAt"
     )]
-    pub updated_at: DateTime,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, SimpleObject)]
 pub struct Role {
     #[serde(rename = "_id")]
-    pub id: ObjectId,
+    pub id: Uuid,
     pub name: String,
-    #[serde(
-        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "createdAt"
-    )]
-    pub created_at: DateTime,
-    #[serde(
-        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "updatedAt"
-    )]
-    pub updated_at: DateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -109,110 +90,26 @@ impl core::fmt::Display for UserError {
     }
 }
 
-impl From<User> for Bson {
-    fn from(user: User) -> Bson {
-        bson::to_bson(&user).unwrap()
-    }
-}
-
 #[tracing::instrument(target = "database", skip(db))]
-pub async fn all_users(db: &Client) -> Result<Vec<User>, UserError> {
-    let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
-    let pipeline = vec![
-        stage_lookup_roles(),
-    ];
-    do_vec_aggregation(users, pipeline).await
+pub async fn all_users(db: &PgPool) -> Result<Vec<User>, UserError> {
+    todo!()
 }
 
 #[tracing::instrument(target = "database", skip(db))]
 pub async fn find_user(
-    db: &Client,
+    db: &PgPool,
     user_id: Option<&str>,
     username: Option<&str>,
     email: Option<&str>,
     salt: Option<&str>,
 ) -> Result<Vec<User>, UserError> {
-    let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
-    let pipeline = vec![
-        stage_lookup_user(user_id, username, email, salt),
-        stage_lookup_roles(),
-    ];
-    do_vec_aggregation(users, pipeline).await
+    todo!()
 }
 
-pub async fn save_user(db: &Client, user: NewUser) -> Result<(), UserError> {
-    let users: Collection<NewUser> = db.database("bridge_scorecard_api").collection("users");
-    users.insert_one(user).await?;
-    Ok(())
+pub async fn save_user(db: &PgPool, user: NewUser) -> Result<(), UserError> {
+    todo!()
 }
 
-pub async fn update_user(db: &Client, user: &User) -> Result<(), UserError> {
-    let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
-    users.update_one(
-        doc! {"_id": user.id},
-        doc! {"$set": user},
-    )
-    .await?;
-    Ok(())
-}
-
-#[tracing::instrument(target = "database", skip(users), level = "trace")]
-async fn do_vec_aggregation(
-    users: Collection<User>,
-    pipeline: Vec<Document>,
-) -> Result<Vec<User>, UserError> {
-    let mut cursor = users.aggregate(pipeline).await?;
-    let mut results: Vec<User> = Vec::new();
-
-    while let Some(document) = cursor.try_next().await? {
-        let bson = bson::from_document(document)
-            .map_err(|e| {
-                tracing::error!("Error in from_document: {:?}", e);
-                e
-            })?;
-        tracing::info!("{:?}", bson);
-        let user: User = bson::from_bson(bson)
-            .map_err(|e| {
-                tracing::error!("Error in from_bson: {:?}", e);
-                e
-            })?;
-        results.push(user);
-    }
-    Ok(results)
-    
-}
-
-fn stage_lookup_user(
-    user_id: Option<&str>,
-    username: Option<&str>,
-    email: Option<&str>,
-    salt: Option<&str>,
-) -> Document {
-    let mut filter = doc! {};
-    if let Some(user_id) = user_id {
-        filter.insert("_id", ObjectId::from_str(user_id).unwrap());
-    }
-    if let Some(username) = username {
-        filter.insert("username", username);
-    }
-    if let Some(email) = email {
-        filter.insert("email", email);
-    }
-    if let Some(salt) = salt {
-        filter.insert("salt", salt);
-    }
-    doc! {
-        "$match": filter
-    }
-}
-
-fn stage_lookup_roles() -> Document {
-    doc! {
-        "$lookup": doc!{
-            "from": "roles",
-            "localField": "roles",
-            "foreignField": "_id",
-            "as": "roles"
-        }
-    }
+pub async fn update_user(db: &PgPool, user: &User) -> Result<(), UserError> {
+    todo!()
 }

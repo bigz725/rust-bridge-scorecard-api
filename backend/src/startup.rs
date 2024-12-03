@@ -1,7 +1,7 @@
+use sqlx::PgPool;
 use tokio::net::TcpListener;
 use axum::{middleware, Router};
 use axum::routing::IntoMakeService;
-use mongodb::Client;
 use secrecy::{ExposeSecret, Secret};
 
 use crate::middlewares::request_id::add_session_id;
@@ -49,13 +49,13 @@ impl Application {
 pub struct ApplicationBaseUrl(pub String);
 
 async fn run(
-    db_conn: Client,
+    db_conn: PgPool,
     jwt_secret: Secret<String>,
 ) -> IntoMakeService<Router> {
     let jwt_bytes = jwt_secret.expose_secret().as_bytes();
     let keys = Keys::new(jwt_bytes);
     let state = AppState {
-        mongodb_client: db_conn,
+        db_conn,
         keys
     };
 
@@ -75,16 +75,18 @@ async fn run(
     .into_make_service()
 }
 
-pub async fn get_db_conn(configuration: &DatabaseSettings) -> Client {
-    let client = Client::with_options(configuration.with_db().await);
-    match client {
-        Ok(client) => {
-            tracing::info!("Connected to MongoDB at {}", configuration.host);
-            client
+pub async fn get_db_conn(configuration: &DatabaseSettings) -> PgPool {
+
+    let pool = PgPool::connect_with(configuration.with_db().await)
+        .await;
+    match pool {
+        Ok(pool) => {
+            tracing::info!("Connected to Postgres at {}", configuration.host);
+            pool
         }
         Err(e) => {
-            tracing::error!("Failed to connect to MongoDB: {:?}", e);
-            panic!("Failed to connect to MongoDB: {:?}", e);
+            tracing::error!("Failed to connect to Postgres: {:?}", e);
+            panic!("Failed to connect to Postgres: {:?}", e);
         }
     }
 }

@@ -20,7 +20,7 @@ axum = {version = "0.7.5", features=["macros"]}
 base64 = "0.22.1"
 bcrypt = {version="0.15.1", features=["alloc"]}
 bson = "2.11.0"
-chrono = "0.4.38"
+chrono = {version="0.4.38", features = ["serde"]}
 config = "0.14.0"
 dotenv = "0.15.0"
 futures = "0.3.30"
@@ -43,4 +43,5 @@ tracing-core = "0.1.32"
 tracing-log = "0.2.0"
 time = "0.3.35"
 tracing-subscriber ={ version = "0.3.18", features = ["json", "env-filter"] }
-uuid = {version = "1.9.1", features = ["serde", "v7"]}
+uuid = {version = "1.9.1", features = ["serde", "v7", "v4"]}
+sqlx = {version = "0.8.2", features = ["runtime-tokio", "macros", "derive", "migrate", "postgres", "uuid", "bigdecimal", "json", "chrono"]}

@@ -24,7 +24,7 @@ pub fn routes(state: &AppState) -> Router<AppState> {
 #[tracing::instrument(skip(db))]
 #[debug_handler]
 async fn user_search(
-    State(AppState{mongodb_client: db, keys: _}): State<AppState>,
+    State(AppState{db_conn: db, keys: _}): State<AppState>,
     payload: Json<UserSearchPayload>,
 ) -> Result<Json<Value>, LoginError> {
     let result = find_user(&db, payload.user_id.as_deref(), payload.username.as_deref(), payload.email.as_deref(), None).await?;

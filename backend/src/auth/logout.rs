@@ -1,4 +1,4 @@
-use mongodb::Client;
+use sqlx::PgPool;
 
 use crate::models::user::{update_user, User, UserError};
 
@@ -14,7 +14,7 @@ pub enum LogoutError {
 }
 
 #[tracing::instrument(target="logout", skip(db))]
-pub async fn logout(db: &Client, user: &mut User) -> Result<(), LogoutError> {
+pub async fn logout(db: &PgPool, user: &mut User) -> Result<(), LogoutError> {
     user.salt = salt().await;
     update_user(db, user).await?;
     Ok(())

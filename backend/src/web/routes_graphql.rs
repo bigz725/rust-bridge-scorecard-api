@@ -17,7 +17,7 @@ async fn graphiql() -> impl IntoResponse {
 #[tracing::instrument(skip(db, keys, maybe_user, token, req))]
 #[debug_handler]
 async fn graphql_handler(
-    State(AppState{mongodb_client: db, keys}): State<AppState>, 
+    State(AppState{db_conn: db, keys}): State<AppState>, 
     Extension(maybe_user): Extension<Option<User>>,
     token: Option<BearerToken>, 
     req: GraphQLRequest) -> GraphQLResponse {
@@ -50,7 +50,7 @@ pub fn routes(state: &AppState) -> Router<AppState> {
 #[tracing::instrument(skip(auth_token, keys, request, next))]
 async fn get_claims_from_optional_auth_token(
     auth_token: Option<BearerToken>,
-    State(AppState{mongodb_client: _, keys}): State<AppState>,
+    State(AppState{db_conn: _, keys}): State<AppState>,
     mut request: Request,
     next: Next,
 ) -> Response<Body> {
@@ -76,15 +76,15 @@ async fn get_claims_from_optional_auth_token(
     }
 }
 
-#[tracing::instrument(skip(claims, mongodb_client, request, next))]
+#[tracing::instrument(skip(claims, db_conn, request, next))]
 pub async fn lookup_user_from_token(
     Extension(claims): Extension<Option<Claims>>,
-    State(AppState{ mongodb_client, keys: _}): State<AppState>,
+    State(AppState{ db_conn, keys: _}): State<AppState>,
     mut request: Request,
     next: Next,
 ) -> Response<Body> {
     if let Some(claims) = claims {
-        let result = find_user(&mongodb_client,Some(&claims.id), None, None, Some(&claims.salt))
+        let result = find_user(&db_conn,Some(&claims.id), None, None, Some(&claims.salt))
             .await
             .map_err(LoginError::from);
         let users = match result {
