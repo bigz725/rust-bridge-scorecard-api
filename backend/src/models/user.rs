@@ -59,8 +59,6 @@ pub struct Role {
 #[non_exhaustive]
 pub enum UserError {
     NoDbConnectionError,
-    QueryError(#[from] mongodb::error::Error),
-    InvalidUserRecord(#[from] bson::de::Error),
     BadDecryption(#[from] BcryptError),
     InvalidCredentials,
     UserNotFound,

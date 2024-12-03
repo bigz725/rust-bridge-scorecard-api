@@ -69,9 +69,7 @@ pub struct LoginPayload {
 impl From<UserError> for LoginError {
     fn from(err: UserError) -> Self {
         match err {
-            UserError::BadDecryption(_)
-            | UserError::QueryError(_)
-            | UserError::InvalidUserRecord(_) => LoginError::UnexpectedError(err.into()),
+            UserError::BadDecryption(_) => LoginError::UnexpectedError(err.into()),
             _ => Self::AuthError(err.into()),
         }
     }

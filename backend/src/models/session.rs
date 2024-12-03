@@ -10,12 +10,6 @@ pub enum SessionError {
     InvalidScoringTypeString(String),
     #[error("No database connection")]
     NoDbConnectionError,
-    #[error("Query error: {0}")]
-    QueryError(#[from] mongodb::error::Error),
-    #[error("Invalid session record: {0}")]
-    InvalidSessionRecord(#[from] bson::de::Error),
-    #[error("Could not convert {0} to ObjectId")]
-    InvalidObjectId(#[from] bson::oid::Error),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, SimpleObject)]
