@@ -104,8 +104,7 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
 
 impl DatabaseSettings {
     pub async fn with_db(&self) -> PgConnectOptions {
-        let client_options = self.without_db().await.database(&self.database_name).to_owned();
-        client_options
+        self.without_db().await.database(&self.database_name).to_owned()
     }
 
     pub async fn without_db(&self) -> PgConnectOptions {
@@ -123,10 +122,3 @@ impl DatabaseSettings {
             .ssl_mode(ssl_mode)
     }
 }
-
-// pub async fn db_conn_simple() -> Client {
-//     let uri = std::env::var("MONGODB_URL").unwrap_or_else(|_| "mongodb://localhost".to_string());
-//     Client::with_uri_str(uri)
-//         .await
-//         .expect("Failed to connect to mongodb")
-// }

@@ -3,10 +3,8 @@ use bcrypt::BcryptError;
 use chrono::{Utc, DateTime};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
-use std::{fmt::{Display, Formatter, Result as FmtResult}, str::FromStr
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use sqlx::PgPool;
-//use tokio_stream::StreamExt;
 
 #[derive(Debug, Deserialize, Serialize, Clone, SimpleObject)]
 pub struct User {

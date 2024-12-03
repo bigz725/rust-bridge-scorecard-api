@@ -8,10 +8,8 @@ use axum::{
     routing::{get, post, put},
     Extension, Json, Router,
 };
-use bson::oid::ObjectId;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::str::FromStr;
 
 use crate::{
     auth::jwt::Claims,
@@ -20,7 +18,7 @@ use crate::{
         verify_jwt::get_claims_from_auth_token,
     },
     models::session::{
-        create_session, get_sessions_for_user_id, update_session, NewSessionDTO, ScoringType, SessionError, SessionUpdateDTO
+        create_session, get_sessions_for_user_id, update_session, ScoringType, Session, SessionError 
     },
     state::AppState,
 };
@@ -34,10 +32,10 @@ pub struct SessionSearchPayload {
 pub enum SessionWebError {
     #[error("Cannot save session to different user")]
     Unauthorized(String, String),
-    #[error("Bson error")]
-    BsonError(#[from] bson::oid::Error),
     #[error("Data error")]
     UnexpectedError(#[from] SessionError),
+    #[error("Uuid error")]
+    UuidError(#[from] uuid::Error),
 }
 
 impl IntoResponse for SessionWebError {
@@ -60,9 +58,9 @@ impl IntoResponse for SessionWebError {
                     .body(Json(json!({ "error": e.to_string() })).to_string().into())
                     .unwrap()
             }
-            SessionWebError::BsonError(e) => {
+            SessionWebError::UuidError(e) => {
                 Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .status(StatusCode::BAD_REQUEST)
                     .body(Json(json!({ "error": e.to_string() })).to_string().into())
                     .unwrap()
             }
@@ -94,8 +92,8 @@ async fn session_search(
     }): State<AppState>,
     Json(payload): Json<SessionSearchPayload>,
 ) -> Result<Json<Value>, SessionWebError> {
-    let uid = ObjectId::from_str(&user_id)?;
-    let result = get_sessions_for_user_id(&db, &uid, payload.scoring_type).await?;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).map_err(SessionWebError::UuidError)?;
+    let result = get_sessions_for_user_id(&db, &user_uuid, payload.scoring_type).await?;
     Ok(Json(json!(result)))
 }
 
@@ -108,11 +106,13 @@ async fn create_session_handler(
         db_conn: db,
         keys: _,
     }): State<AppState>,
-    Json(payload): Json<NewSessionDTO>,
+    Json(payload): Json<Session>,
 ) -> Result<Json<Value>, SessionWebError> {
-    let owner_id = &payload.owner;
-    if &user_id != owner_id || &claims.id != owner_id {
-        return Err(SessionWebError::Unauthorized(claims.id, owner_id.clone()));
+    let proposed_owner_id = &payload.owner;
+    let target_user_uuid = uuid::Uuid::parse_str(&user_id).map_err(SessionWebError::UuidError)?;
+    let claims_user_uuid = uuid::Uuid::parse_str(&claims.id).map_err(SessionWebError::UuidError)?;
+    if &target_user_uuid != proposed_owner_id || &claims_user_uuid != proposed_owner_id {
+        return Err(SessionWebError::Unauthorized(claims.id, proposed_owner_id.to_string()));
     }
     let result = create_session(&db, payload).await?;
     Ok(Json(json!(result)))
@@ -127,19 +127,19 @@ async fn update_session_handler(
         db_conn: db,
         keys: _,
     }): State<AppState>,
-    Json(payload): Json<SessionUpdateDTO>,
+    Json(payload): Json<Session>,
 ) -> impl IntoResponse {
     if user_id != claims.id  {
         return SessionWebError::Unauthorized(claims.id, user_id.clone()).into_response();
     }
-    match update_session(&db, &session_id, payload).await.map_err(SessionWebError::UnexpectedError)
+    let session_uuid = match uuid::Uuid::parse_str(&session_id).map_err(SessionWebError::UuidError) {
+        Ok(uuid) => uuid,
+        Err(e) => return e.into_response(),
+    };
+    match update_session(&db, &session_uuid, payload).await.map_err(SessionWebError::UnexpectedError)
     {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => e.into_response(),
     
     }
-    // let retval = json!({"updated": session_id});
-    // StatusCode::NO_CONTENT.into_response()
-        //.body(Json(retval).to_string().into())
-        //.unwrap()
 }
