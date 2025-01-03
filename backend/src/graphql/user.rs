@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use sqlx::PgPool;
 use crate::{auth::{jwt::Keys, login::{login, LoginError, LoginPayload, LoginResponse}, logout::{logout, LogoutError}}, models::user::{all_users, find_user, User, UserError}};
 
-
+type DieselPgPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgConnection>>;
 pub struct Query;
 
 pub struct Mutation;
@@ -18,18 +18,18 @@ impl Query {
     }
     #[tracing::instrument(target="graphql",skip(self, context))]
     pub async fn user(&self, context: &Context<'_>, username: String) -> Result<Vec<User>, UserError> {
-        let db = context.data::<PgPool>().map_err(|_| UserError::NoDbConnectionError)?;
+        let diesel = context.data::<DieselPgPool>().map_err(|_| UserError::NoDbConnectionError)?;
         //find_user(db: &Client, user_id: Option<&str>, username: Option<&str>, email: Option<&str>, salt: Option<&str>)
-        find_user(db, None, Some(username).as_deref(), None, None).await
+        find_user(diesel, None, Some(username).as_deref(), None, None).await
     }
 }
 
 #[Object]
 impl Mutation {
     pub async fn login(&self, context: &Context<'_>, payload: LoginPayload) -> Result<LoginResponse, LoginError> {
-        let db = context.data::<PgPool>().expect("No db connection");
+        let diesel = context.data::<DieselPgPool>().map_err(|_| UserError::NoDbConnectionError)?;
         let keys = context.data::<Keys>().expect("No keys");
-        let response = login(db, keys, payload).await?;
+        let response = login(diesel, keys, payload).await?;
 
         Ok(response)
 

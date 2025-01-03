@@ -88,6 +88,7 @@ async fn session_search(
     Path(user_id): Path<String>,
     State(AppState {
         db_conn: db,
+        diesel_conn: _,
         keys: _,
     }): State<AppState>,
     Json(payload): Json<SessionSearchPayload>,
@@ -104,6 +105,7 @@ async fn create_session_handler(
     Extension(claims): Extension<Claims>,
     State(AppState {
         db_conn: db,
+        diesel_conn: _,
         keys: _,
     }): State<AppState>,
     Json(payload): Json<Session>,
@@ -125,6 +127,7 @@ async fn update_session_handler(
     Extension(claims): Extension<Claims>,
     State(AppState {
         db_conn: db,
+        diesel_conn: _,
         keys: _,
     }): State<AppState>,
     Json(payload): Json<Session>,

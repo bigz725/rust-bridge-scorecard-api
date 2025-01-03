@@ -18,6 +18,7 @@ pub fn routes(state: &AppState) -> Router<AppState> {
 async fn handle_logout(
         State(AppState {
         db_conn: db,
+        diesel_conn: _,
         keys: _,
     }): State<AppState>,    
         request: Request,) -> Result<Json<Value>, LogoutError> {

@@ -1,58 +1,36 @@
 use async_graphql::SimpleObject;
 use bcrypt::BcryptError;
-use chrono::{Utc, DateTime};
+use chrono::NaiveDateTime;
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use sqlx::PgPool;
+use diesel::{prelude::*, r2d2::{ConnectionManager, Pool}};
 
-#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject)]
+type DieselPool = Pool<ConnectionManager<PgConnection>>;
+
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable)]
+#[diesel(table_name = crate::schema::users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
-    #[serde(rename = "_id")]
     pub id: Uuid,
-    pub username: String,
-    pub password: String,
-    pub salt: String,
     pub email: String,
-    // !!! ATTENTION !!!
-    // When getting users from Mongodb, you must handle the roles.
-    // The find_user method does this through an aggregation pipeline.
-    // If you add another search method, you must handle the roles somehow.
-    // Otherwise, you will get a deserialization error, and it will complain
-    // about a missing "_id" field, but won't tell you it comes from the vec of roles.
-    #[serde(skip_serializing)]
-    pub roles: Vec<Role>,
-
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub password: String,
+    pub salt: String,    
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub username: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct NewUser {
-    pub username: String,
-    pub password: String,
-    pub salt: String,
-    pub email: String,
-    pub roles: Vec<Role>,
-    #[serde(
-        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "createdAt"
-    )]
-    pub created_at: DateTime<Utc>,
-    #[serde(
-        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "updatedAt"
-    )]
-    pub updated_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject)]
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable)]
+#[diesel(table_name = crate::schema::roles)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Role {
     #[serde(rename = "_id")]
     pub id: Uuid,
     pub name: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -86,26 +64,39 @@ impl core::fmt::Display for UserError {
     }
 }
 
-#[tracing::instrument(target = "database", skip(db))]
-pub async fn all_users(db: &PgPool) -> Result<Vec<User>, UserError> {
+#[tracing::instrument(target = "database", skip(_db))]
+pub async fn all_users(_db: &PgPool) -> Result<Vec<User>, UserError> {
     todo!()
 }
 
-#[tracing::instrument(target = "database", skip(db))]
+#[tracing::instrument(target = "database", skip(diesel_pool))]
 pub async fn find_user(
-    db: &PgPool,
+    diesel_pool: &DieselPool,
     user_id: Option<&str>,
     username: Option<&str>,
     email: Option<&str>,
     salt: Option<&str>,
 ) -> Result<Vec<User>, UserError> {
+    use crate::schema::users::dsl::*;
+    let mut conn = diesel_pool.clone().get().unwrap();
+    
+
+    
+    let results = users
+        .limit(5)
+        .select(User::as_select())
+        .load::<User>(&mut conn)
+        .map_err(|e| {
+            tracing::error!("Error: {:?}", e);
+            UserError::NoDbConnectionError
+        });
+    results
+}
+
+pub async fn save_user(_db: &PgPool, _user: &User) -> Result<(), UserError> {
     todo!()
 }
 
-pub async fn save_user(db: &PgPool, user: NewUser) -> Result<(), UserError> {
-    todo!()
-}
-
-pub async fn update_user(db: &PgPool, user: &User) -> Result<(), UserError> {
+pub async fn update_user(_db: &PgPool, _user: &User) -> Result<(), UserError> {
     todo!()
 }

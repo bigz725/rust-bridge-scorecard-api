@@ -23,6 +23,7 @@ pub fn routes() -> Router<AppState> {
 async fn session_search(
     State(AppState {
         db_conn: db,
+        diesel_conn: _,
         keys: _,
     }): State<AppState>,
 ) -> Result<Json<Value>, SessionWebError> {

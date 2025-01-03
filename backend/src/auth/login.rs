@@ -15,9 +15,11 @@ use bcrypt::verify;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sqlx::PgPool;
 
 use super::jwt::Keys;
+
+type DieselPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgConnection>>;
+
 #[derive(thiserror::Error, Debug)]
 pub enum LoginError {
     #[error("Authentication failed")]
@@ -41,7 +43,7 @@ impl LoginResponse {
             id: user.id.to_string(),
             username: user.username,
             email: user.email,
-            roles: process_roles(user.roles),
+            roles: Vec::<String>::new(),
             access_token: token,
         }
     }
@@ -90,14 +92,14 @@ impl IntoResponse for LoginError {
     }
 }
 
-#[tracing::instrument(target = "login", skip(db, keys, payload))]
+#[tracing::instrument(target = "login", skip(diesel, keys, payload))]
 pub async fn login(
-    db: &PgPool,
+    diesel: &DieselPool,
     keys: &Keys,
     payload: LoginPayload,
 ) -> Result<LoginResponse, LoginError> {
     
-    let users = find_user(db, None, Some(&payload.username), None, None).await?;
+    let users = find_user(diesel, None, Some(&payload.username), None, None).await?;
     if users.len() > 1 {
         tracing::warn!("Multiple users found with username {}", payload.username);
         Err(UserError::UserNotFound)?

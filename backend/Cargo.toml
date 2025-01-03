@@ -21,6 +21,7 @@ base64 = "0.22.1"
 bcrypt = {version="0.15.1", features=["alloc"]}
 chrono = {version="0.4.38", features = ["serde"]}
 config = "0.14.0"
+diesel = { version = "2.2.6", features = ["postgres", "chrono", "numeric", "serde_json", "uuid", "r2d2"] }
 dotenv = "0.15.0"
 futures = "0.3.30"
 jsonwebtoken = "9.3.0"
@@ -42,3 +43,4 @@ tracing-log = "0.2.0"
 time = "0.3.35"
 tracing-subscriber ={ version = "0.3.18", features = ["json", "env-filter"] }
 uuid = {version = "1.9.1", features = ["serde", "v7", "v4"]}
+

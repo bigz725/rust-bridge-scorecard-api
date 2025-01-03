@@ -4,6 +4,7 @@ use crate::{auth::login::LoginError,middlewares::auth::{lookup_user::lookup_user
 use serde::Deserialize;
 
 
+
 #[derive(Debug, Deserialize)]
 struct UserSearchPayload {
     username: Option<String>,
@@ -21,12 +22,12 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(diesel_conn))]
 #[debug_handler]
 async fn user_search(
-    State(AppState{db_conn: db, keys: _}): State<AppState>,
+    State(AppState{db_conn: _, diesel_conn, keys: _}): State<AppState>,
     payload: Json<UserSearchPayload>,
 ) -> Result<Json<Value>, LoginError> {
-    let result = find_user(&db, payload.user_id.as_deref(), payload.username.as_deref(), payload.email.as_deref(), None).await?;
+    let result = find_user(&diesel_conn, payload.user_id.as_deref(), payload.username.as_deref(), payload.email.as_deref(), None).await?;
     Ok(Json(json!(result)))
 }
