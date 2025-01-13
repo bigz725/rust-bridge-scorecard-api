@@ -1,5 +1,6 @@
 
 use async_graphql::{Context, Object};
+use diesel::{r2d2::{ConnectionManager, Pool}, PgConnection};
 use serde_json::{json, Value};
 use sqlx::PgPool;
 use crate::{auth::{jwt::Keys, login::{login, LoginError, LoginPayload, LoginResponse}, logout::{logout, LogoutError}}, models::user::{all_users, find_user, User, UserError}};
@@ -8,6 +9,7 @@ type DieselPgPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::P
 pub struct Query;
 
 pub struct Mutation;
+type DieselPool = Pool<ConnectionManager<PgConnection>>;
 
 #[Object]
 impl Query {
@@ -36,7 +38,7 @@ impl Mutation {
     }
 
     pub async fn logout(&self, ctx: &Context<'_>) -> Result<Value, LogoutError> {
-        let db = ctx.data::<PgPool>().expect("No db connection");
+        let diesel = ctx.data::<DieselPool>().expect("No diesel connection");
         let user = ctx.data::<Option<User>>()
             .map_err(|_| {
                 tracing::error!("Error retrieving user from context");
@@ -45,8 +47,8 @@ impl Mutation {
         match user {
             Some(ref user) => {
                 tracing::info!("Logging out user: {}", user.username);
-                let mut target = user.clone();
-                logout(db, &mut target).await?;
+                let target = user.clone();
+                logout(diesel, &target).await?;
                 Ok(json!({"message": format!("User: {} logged out", user.username)}))
             }
             None => {

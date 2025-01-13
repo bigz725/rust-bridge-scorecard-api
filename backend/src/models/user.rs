@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use sqlx::PgPool;
 use diesel::{associations::HasTable, prelude::*, r2d2::{ConnectionManager, Pool}};
-
+use crate::web::routes_user::UserUpdatePayload;
 type DieselPool = Pool<ConnectionManager<PgConnection>>;
 
-#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable)]
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable, Identifiable, AsChangeset)]
 #[diesel(table_name = crate::schema::users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
@@ -22,7 +22,38 @@ pub struct User {
     pub username: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable)]
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::schema::users)]
+pub struct NewUser {
+    pub email: String,
+    pub password: String,
+    pub salt: String,
+    pub username: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, AsChangeset, Default)]
+#[diesel(table_name = crate::schema::users)]
+pub struct UpdateUser {
+    pub id: Uuid,
+    pub username: Option<String>,
+    pub email: Option<String>,
+    pub password: Option<String>,
+    pub salt: Option<String>,
+}
+
+impl From<UserUpdatePayload> for UpdateUser {
+    fn from(payload: UserUpdatePayload) -> Self {
+        UpdateUser {
+            id: payload.id,
+            username: payload.username,
+            email: payload.email,
+            password: payload.password,
+            salt: None,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable, Identifiable)]
 #[diesel(table_name = crate::schema::roles)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Role {
@@ -93,7 +124,7 @@ pub async fn find_user(
     if let Some(slt) = salt_param {
         query = query.filter(salt.eq(slt));
     }
-    
+
     query
         .limit(5)
         .select(User::as_select())
@@ -104,10 +135,33 @@ pub async fn find_user(
         })
 }
 
-pub async fn save_user(_db: &PgPool, _user: &User) -> Result<(), UserError> {
-    todo!()
+pub async fn save_user(db: &DieselPool, user: &NewUser) -> Result<(), UserError> {
+    use crate::schema::users::dsl::*;
+    let mut conn = db.clone().get().unwrap();
+
+    diesel::insert_into(users)
+        .values(user)
+        .execute(&mut conn)
+        .map_err(|e| {
+            tracing::error!("Error: {:?}", e);
+            UserError::NoDbConnectionError
+        })?;
+
+    Ok(())
 }
 
-pub async fn update_user(_db: &PgPool, _user: &User) -> Result<(), UserError> {
-    todo!()
+pub async fn update_user(db: &DieselPool, user_param: UpdateUser) -> Result<(), UserError> {
+    use crate::schema::users::dsl::*;
+    let mut conn = db.clone().get().unwrap();
+    
+    diesel::update(users)
+        .filter(id.eq(user_param.id))
+        .set(user_param)
+        .execute(&mut conn)
+        .map_err(|e| {
+            tracing::error!("Error: {:?}", e);
+            UserError::NoDbConnectionError
+        })?;
+
+    Ok(())
 }

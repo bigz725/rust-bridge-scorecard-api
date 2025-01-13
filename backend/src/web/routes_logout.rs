@@ -13,17 +13,17 @@ pub fn routes(state: &AppState) -> Router<AppState> {
                  .route_layer(get_claims_layer)
 }
 
-#[tracing::instrument(skip(db, request,))]
+#[tracing::instrument(skip(diesel_conn, request,))]
 #[debug_handler]
 async fn handle_logout(
         State(AppState {
-        db_conn: db,
-        diesel_conn: _,
+        db_conn: _,
+        diesel_conn,
         keys: _,
     }): State<AppState>,    
         request: Request,) -> Result<Json<Value>, LogoutError> {
-    let mut user = request.extensions().get::<User>().unwrap().clone();
-    logout(&db, &mut user).await?;
+    let user = request.extensions().get::<User>().unwrap().clone();
+    logout(&diesel_conn, &user).await?;
     Ok(Json(json!({"message": "Successfully logged out"})))
 }
 
