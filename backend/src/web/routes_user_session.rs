@@ -18,14 +18,15 @@ use crate::{
         verify_jwt::get_claims_from_auth_token,
     },
     models::session::{
-        create_session, get_sessions_for_user_id, update_session, ScoringType, Session, SessionError 
+        create_session, get_sessions_for_user_id, update_session, Session, SessionError 
     },
+    models::scoring_type::ScoringTypeEnum,
     state::AppState,
 };
 
 #[derive(Debug, Deserialize)]
 pub struct SessionSearchPayload {
-    scoring_type: Option<ScoringType>,
+    scoring_type: Option<ScoringTypeEnum>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -82,52 +83,52 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route_layer(get_claims_layer)
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(diesel_conn))]
 #[debug_handler]
 async fn session_search(
     Path(user_id): Path<String>,
     State(AppState {
-        db_conn: db,
-        diesel_conn: _,
+        db_conn: _,
+        diesel_conn,
         keys: _,
     }): State<AppState>,
     Json(payload): Json<SessionSearchPayload>,
 ) -> Result<Json<Value>, SessionWebError> {
     let user_uuid = uuid::Uuid::parse_str(&user_id).map_err(SessionWebError::UuidError)?;
-    let result = get_sessions_for_user_id(&db, &user_uuid, payload.scoring_type).await?;
+    let result = get_sessions_for_user_id(&diesel_conn, &user_uuid, payload.scoring_type).await?;
     Ok(Json(json!(result)))
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(diesel_conn))]
 #[debug_handler]
 async fn create_session_handler(
     Path(user_id): Path<String>,
     Extension(claims): Extension<Claims>,
     State(AppState {
-        db_conn: db,
-        diesel_conn: _,
+        db_conn: _,
+        diesel_conn,
         keys: _,
     }): State<AppState>,
     Json(payload): Json<Session>,
 ) -> Result<Json<Value>, SessionWebError> {
-    let proposed_owner_id = &payload.owner;
+    let proposed_owner_id = &payload.owner_id;
     let target_user_uuid = uuid::Uuid::parse_str(&user_id).map_err(SessionWebError::UuidError)?;
     let claims_user_uuid = uuid::Uuid::parse_str(&claims.id).map_err(SessionWebError::UuidError)?;
     if &target_user_uuid != proposed_owner_id || &claims_user_uuid != proposed_owner_id {
         return Err(SessionWebError::Unauthorized(claims.id, proposed_owner_id.to_string()));
     }
-    let result = create_session(&db, payload).await?;
+    let result = create_session(&diesel_conn, payload).await?;
     Ok(Json(json!(result)))
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(diesel_conn))]
 #[debug_handler]
 async fn update_session_handler(
     Path((user_id, session_id)): Path<(String, String)>,
     Extension(claims): Extension<Claims>,
     State(AppState {
-        db_conn: db,
-        diesel_conn: _,
+        db_conn: _,
+        diesel_conn,
         keys: _,
     }): State<AppState>,
     Json(payload): Json<Session>,
@@ -139,7 +140,7 @@ async fn update_session_handler(
         Ok(uuid) => uuid,
         Err(e) => return e.into_response(),
     };
-    match update_session(&db, &session_uuid, payload).await.map_err(SessionWebError::UnexpectedError)
+    match update_session(&diesel_conn, &session_uuid, payload).await.map_err(SessionWebError::UnexpectedError)
     {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => e.into_response(),

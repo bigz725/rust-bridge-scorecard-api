@@ -18,15 +18,15 @@ pub fn routes() -> Router<AppState> {
         .route("/api/sessions", get(session_search))
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(diesel))]
 #[debug_handler]
 async fn session_search(
     State(AppState {
-        db_conn: db,
-        diesel_conn: _,
+        db_conn: _,
+        diesel_conn: diesel,
         keys: _,
     }): State<AppState>,
 ) -> Result<Json<Value>, SessionWebError> {
-    let result = get_sessions(&db, None).await?;
+    let result = get_sessions(&diesel, None).await?;
     Ok(Json(json!(result)))
 }

@@ -1,8 +1,10 @@
-use async_graphql::{Enum, SimpleObject};
-use chrono::{Utc, DateTime};
+use async_graphql::SimpleObject;
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
 use uuid::Uuid;
+use diesel::{prelude::*, r2d2::{ConnectionManager, Pool}};
+use super::scoring_type::ScoringTypeEnum;
+type DieselPool = Pool<ConnectionManager<PgConnection>>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
@@ -12,65 +14,50 @@ pub enum SessionError {
     NoDbConnectionError,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, SimpleObject)]
+/*
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable, Identifiable, AsChangeset)]
+#[diesel(table_name = crate::schema::users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+ */
+
+#[derive(Debug, Serialize, Deserialize, Clone, Insertable, Queryable, Selectable, Identifiable, SimpleObject)]
+#[diesel(table_name = crate::schema::sessions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Session {
     pub id: Uuid,
     pub name: String,
-    pub location: String,
-    pub date: DateTime<Utc>,
-    pub owner: Uuid,
-    pub scoring_type: ScoringType,
+    pub location: Option<String>,
+    pub date: NaiveDate,
+    pub owner_id: Uuid,
+    pub scoring_type: ScoringTypeEnum,
     pub should_use_victory_points: bool,
-}
-#[derive(Debug, Serialize, Deserialize, Enum, Copy, Clone, Eq, PartialEq)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum ScoringType {
-    Imp,
-    Mp,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
-impl std::fmt::Display for ScoringType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ScoringType::Imp => write!(f, "IMP"),
-            ScoringType::Mp => write!(f, "MP"),
-        }
-    }
-}
 
-impl std::str::FromStr for ScoringType {
-    type Err = SessionError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "IMP" => Ok(ScoringType::Imp),
-            "MP" => Ok(ScoringType::Mp),
-            _ => Err(SessionError::InvalidScoringTypeString(s.to_string())),
-        }
-    }
-}
 
 #[tracing::instrument(target = "database", skip(db))]
-pub async fn get_sessions(db: &PgPool, scoring_type: Option<ScoringType>) -> Result<Vec<Session>, SessionError> {
+pub async fn get_sessions(db: &DieselPool, scoring_type: Option<ScoringTypeEnum>) -> Result<Vec<Session>, SessionError> {
     todo!()
 }
 
 #[tracing::instrument(target = "database", skip(db))]
 pub async fn get_sessions_for_user_id(
-    db: &PgPool,
+    db: &DieselPool,
     user_id: &Uuid,
-    scoring_type: Option<ScoringType>,
+    scoring_type: Option<ScoringTypeEnum>,
 ) -> Result<Vec<Session>, SessionError> {
     todo!()
 }
 #[tracing::instrument(target = "database", skip(db))]
-pub async fn create_session(db: &PgPool, session: Session) -> Result<String, SessionError> {
+pub async fn create_session(db: &DieselPool, session: Session) -> Result<String, SessionError> {
     todo!()
 }
 
 #[tracing::instrument(target = "database", skip(db))]
 pub async fn update_session(
-    db: &PgPool,
+    db: &DieselPool,
     session_id: &Uuid,
     session_update: Session,
 ) -> Result<(), SessionError> {
