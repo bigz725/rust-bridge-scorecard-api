@@ -2,7 +2,7 @@
 CREATE TYPE scoring_type AS ENUM('MP', 'IMP');
 
 CREATE TABLE sessions (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY default gen_random_uuid(),
     name TEXT NOT NULL,
     location TEXT,
     date DATE NOT NULL,

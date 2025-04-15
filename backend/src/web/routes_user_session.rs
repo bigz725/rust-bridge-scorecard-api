@@ -10,6 +10,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 use crate::{
     auth::jwt::Claims,
@@ -27,6 +28,17 @@ use crate::{
 #[derive(Debug, Deserialize)]
 pub struct SessionSearchPayload {
     scoring_type: Option<ScoringTypeEnum>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SessionUpdatePayload {
+    pub id: Uuid,
+    pub name: Option<String>,
+    pub location: Option<String>,
+    //pub date: NaiveDate,
+    pub scoring_type: Option<ScoringTypeEnum>,
+    pub should_use_victory_points: Option<bool>,
+
 }
 
 #[derive(thiserror::Error, Debug)]
