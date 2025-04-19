@@ -43,4 +43,4 @@ tracing-core = "0.1.33"
 tracing-log = "0.2.0"
 time = "0.3.41"
 tracing-subscriber ={ version = "0.3.18", features = ["json", "env-filter"] }
-uuid = {version = "1.9.1", features = ["serde", "v7"]}
+uuid = {version = "1.16.0", features = ["serde", "v7"]}
