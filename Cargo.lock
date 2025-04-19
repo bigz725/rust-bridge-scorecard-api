@@ -341,7 +341,7 @@ dependencies = [
  "futures",
  "jsonwebtoken",
  "mongodb",
- "rand 0.8.5",
+ "rand 0.9.1",
  "secrecy",
  "serde",
  "serde-aux",

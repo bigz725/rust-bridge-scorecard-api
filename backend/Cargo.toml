@@ -26,7 +26,7 @@ dotenv = "0.15.0"
 futures = "0.3.30"
 jsonwebtoken = "9.3.0"
 mongodb = {version="3.0.1", features=["tracing-unstable"]}
-rand = {version="0.8.5", features=["std_rng"]}
+rand = {version="0.9.1", features=["std_rng"]}
 secrecy = { version = "0.8.0", features = ["serde"] }
 serde = {version = "1.0.219", features = ["derive"]}
 serde-aux = "4.5.0"
