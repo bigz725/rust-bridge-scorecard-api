@@ -1,8 +1,8 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1.81 as chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.86 AS chef
 WORKDIR /app
 RUN apt update && apt install lld clang -y
 
-FROM chef as planner
+FROM chef AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -15,7 +15,7 @@ COPY --from=planner /app/recipe.json recipe.json
 # Copy all files from our working environment to the image
 COPY . .
 
-ENV SQLX_OFFLINE true
+ENV SQLX_OFFLINE=true
 # Build the project
 
 RUN cargo update axum tower tower-layer

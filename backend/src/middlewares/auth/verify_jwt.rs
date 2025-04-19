@@ -1,7 +1,6 @@
 use axum::{
-    async_trait,
     body::Body,
-    extract::{FromRequestParts, Request, State},
+    extract::{FromRequestParts, OptionalFromRequestParts, Request, State},
     http::{request::Parts, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
@@ -26,7 +25,27 @@ impl IntoResponse for JWTDecryptError {
 
 pub struct BearerToken(pub String);
 
-#[async_trait]
+impl<S> OptionalFromRequestParts<S> for BearerToken
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, &'static str);
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        if let Some(authorization) = parts.headers.get("Authorization") {
+            let token_string = authorization
+                .to_str()
+                .map_err(|_| (StatusCode::UNAUTHORIZED, "Unauthorized"))?
+                .to_string();
+            Ok(Some(BearerToken(token_string)))
+        } else {
+            Err((StatusCode::UNAUTHORIZED, "Unauthorized"))
+        }
+    }
+}
+
 impl<S> FromRequestParts<S> for BearerToken
 where
     S: Send + Sync,
