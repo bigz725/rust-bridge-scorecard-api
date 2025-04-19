@@ -11,7 +11,6 @@ use crate::{auth::jwt::Claims, state::AppState};
 
 #[derive(Debug, Error)]
 #[error("Error decrypting JWT")]
-
 pub struct JWTDecryptError;
 
 impl IntoResponse for JWTDecryptError {

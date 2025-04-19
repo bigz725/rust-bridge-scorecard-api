@@ -76,10 +76,10 @@ pub fn routes(state: &AppState) -> Router<AppState> {
     let lookup_user_layer = middleware::from_fn_with_state(state.clone(), lookup_user_from_token);
     let session_owner_guard_layer = middleware::from_fn(session_owner_guard);
     Router::<AppState>::new()
-        .route("/api/user/:user_id/sessions", get(session_search))
-        .route("/api/user/:user_id/session", post(create_session_handler))
+        .route("/api/user/{user_id}/sessions", get(session_search))
+        .route("/api/user/{user_id}/session", post(create_session_handler))
         .route_layer(session_owner_guard_layer)
-        .route("/api/user/:user_id/session/:session_id", put(update_session_handler))
+        .route("/api/user/{user_id}/session/{session_id}", put(update_session_handler))
         .route_layer(lookup_user_layer)
         .route_layer(get_claims_layer)
 }
