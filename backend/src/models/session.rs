@@ -1,6 +1,7 @@
 use async_graphql::SimpleObject;
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
+use serde_alias::serde_alias;
 use uuid::Uuid;
 use diesel::{prelude::*, r2d2::{ConnectionManager, Pool}};
 use crate::web::routes_user_session::SessionUpdatePayload;
@@ -17,7 +18,7 @@ pub enum SessionError {
     #[error("Error querying the database")]
     DieselError(#[from] diesel::result::Error),
 }
-
+#[serde_alias(CamelCase, SnakeCase)]
 #[derive(Debug, Serialize, Deserialize, Clone, Insertable, Queryable, Selectable, Identifiable, SimpleObject, AsChangeset)]
 #[diesel(table_name = crate::schema::sessions)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -33,6 +34,7 @@ pub struct Session {
     pub updated_at: NaiveDateTime,
 }
 
+#[serde_alias(CamelCase, SnakeCase)]
 #[derive(Debug, Serialize, Deserialize, Clone, Insertable, SimpleObject)]
 #[diesel(table_name = crate::schema::sessions)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -45,6 +47,7 @@ pub struct NewSession {
     pub should_use_victory_points: bool,
 }
 
+#[serde_alias(CamelCase, SnakeCase)]
 #[derive(Debug, Deserialize, Serialize, Clone, AsChangeset, Default)]
 #[diesel(table_name = crate::schema::sessions)]
 pub struct UpdateSession{
@@ -100,7 +103,7 @@ pub async fn get_sessions_for_user_id(
     }
 
     query
-        .limit(5)
+        //.limit(20)
         .filter(owner_id.eq(user_id))
         .select(Session::as_select())
         .load::<Session>(&mut conn)
