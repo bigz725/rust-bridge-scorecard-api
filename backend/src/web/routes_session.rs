@@ -1,13 +1,17 @@
 use axum::{
-    debug_handler,
-    extract::State,
-    routing::get,
-    Json, Router,
+    body::Body, debug_handler, extract::State, http::Response, response::IntoResponse, routing::get, Json, Router
 };
 use serde_json::{json, Value};
-use crate::{models::session::get_sessions, state::AppState};
+use crate::{models::session::{get_sessions, Session}, state::AppState};
 
 use super::routes_user_session::SessionWebError;
+
+impl IntoResponse for Session{
+    fn into_response(self) -> Response<Body> {
+        // Convert the Session struct to a JSON response
+        Json(json!(self)).into_response()
+    }
+}
 
 pub fn routes() -> Router<AppState> {
     // let get_claims_layer =

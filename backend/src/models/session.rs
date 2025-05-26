@@ -33,6 +33,18 @@ pub struct Session {
     pub updated_at: NaiveDateTime,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Insertable, SimpleObject)]
+#[diesel(table_name = crate::schema::sessions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct NewSession {
+    pub name: String,
+    pub location: Option<String>,
+    pub date: NaiveDate,
+    pub owner_id: Uuid,
+    pub scoring_type: ScoringTypeEnum,
+    pub should_use_victory_points: bool,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, AsChangeset, Default)]
 #[diesel(table_name = crate::schema::sessions)]
 pub struct UpdateSession{
@@ -99,8 +111,17 @@ pub async fn get_sessions_for_user_id(
 
 }
 #[tracing::instrument(target = "database", skip(db))]
-pub async fn create_session(db: &DieselPool, session: Session) -> Result<String, SessionError> {
-    todo!()
+pub async fn create_session(db: &DieselPool, session_params: NewSession) -> Result<Session, SessionError> {
+    use crate::schema::sessions::dsl::*;
+    let mut conn = db.clone().get().unwrap();
+    diesel::insert_into(sessions)
+        .values(&session_params)
+        .returning(Session::as_returning())
+        .get_result(&mut conn)
+        .map_err(|e| {
+            tracing::error!("Error: {:?}", e);
+            SessionError::DieselError(e)
+        })
 }
 
 /*     use crate::schema::users::dsl::*;
