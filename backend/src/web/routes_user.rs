@@ -58,6 +58,35 @@ impl IntoResponse for UserWebError {
     }
 }
 
+impl IntoResponse for UserError {
+    fn into_response(self) -> Response<Body> {
+        match self {
+                UserError::UserNotFound(_) => {
+                    tracing::error!("User not found");
+                    (StatusCode::NOT_FOUND, Json(json!({"error": "User not found"}))).into_response()
+                }
+                UserError::InvalidUuid(_) => {
+                    tracing::error!("Invalid UUID format");
+                    (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid UUID format"}))).into_response()
+                }
+                UserError::NoDbConnectionError => {
+                    tracing::error!("No database connection available");
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database connection error"}))).into_response()
+                }
+                _ => {
+                    tracing::error!("Unexpected error: {:?}", self);
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Unexpected error"}))).into_response()
+                }
+        }
+    }
+}
+
+impl IntoResponse for User {
+    fn into_response(self) -> Response<Body> {
+        tracing::debug!("Returning user response: {:?}", self);
+        Json(json!(self)).into_response()
+    }
+}
 pub fn routes(state: &AppState) -> Router<AppState> {
     let get_claims_layer = middleware::from_fn_with_state(state.clone(), get_claims_from_auth_token);
     let lookup_user_layer = middleware::from_fn_with_state(state.clone(), lookup_user_from_token);
@@ -92,8 +121,7 @@ async fn user_update(
         return UserWebError::Unauthorized.into_response();
     }
     let result = update_user(&diesel_conn, payload.into())
-        .await
-        .map_err(UserWebError::DbError);
+        .await;
     match result {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(err) => err.into_response(),
@@ -112,33 +140,5 @@ async fn user_find_by_id(
         return UserWebError::Unauthorized.into_response();
     }
     //let user_uuid = Uuid::parse_str(&user_id).map_err(|_| UserWebError::DbError(UserError::UuidParseError))?;
-    let user = find_user_by_uuid(&diesel_conn, &user_id, None).await;
-
-    match user {
-        Ok(user) => {
-            tracing::info!("User found: {:?}", user);
-            Json(json!(user)).into_response()
-        }
-        Err(err) => {
-            match err {
-                UserError::UserNotFound(_) => {
-                    tracing::warn!("User not found: {}", user_id);
-                    return (StatusCode::NOT_FOUND, Json(json!({"error": "User not found"}))).into_response();
-                }
-                UserError::InvalidUuid(_) => {
-                    tracing::error!("Invalid UUID format for user_id: {}", user_id);
-                    return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid UUID format"}))).into_response();
-                }
-                UserError::NoDbConnectionError => {
-                    tracing::error!("No database connection available");
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database connection error"}))).into_response();
-                }
-                _ => {
-                    tracing::error!("Unexpected error finding user: {:?}", err);
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Unexpected error"}))).into_response();
-                }
-            }
-        }
-
-    }
+    find_user_by_uuid(&diesel_conn, &user_id, None).await.into_response()
 }
