@@ -1,7 +1,7 @@
-use axum::{body::Body, debug_handler, extract::{Path, State}, http::StatusCode, middleware, response::{IntoResponse, Response}, routing::{put,post}, Extension, Json, Router};
+use axum::{body::Body, debug_handler, extract::{Path, State}, http::StatusCode, middleware, response::{IntoResponse, Response}, routing::{put,post,get}, Extension, Json, Router};
 use serde_json::{json, Value};
 use uuid::Uuid;
-use crate::{auth::login::LoginError,middlewares::auth::{lookup_user::lookup_user_from_token, verify_jwt::get_claims_from_auth_token}, models::user::{find_user, update_user, User, UserError}, state::AppState};
+use crate::{auth::login::LoginError,middlewares::auth::{lookup_user::lookup_user_from_token, verify_jwt::get_claims_from_auth_token}, models::user::{find_user, update_user, find_user_by_uuid, User, UserError}, state::AppState};
 use serde::Deserialize;
 
 
@@ -64,6 +64,7 @@ pub fn routes(state: &AppState) -> Router<AppState> {
     Router::new()
         .route("/api/user/search", post(user_search))
         .route("/api/user/:user_id", put(user_update))
+        .route("/api/user/:user_id", get(user_find_by_id))
         .route_layer(lookup_user_layer)
         .route_layer(get_claims_layer)
         
@@ -98,4 +99,46 @@ async fn user_update(
         Err(err) => err.into_response(),
     }
 
+}
+
+#[tracing::instrument(skip(diesel_conn))]
+#[debug_handler]
+async fn user_find_by_id(
+    Path(user_id): Path<String>,
+    Extension(current_user): Extension<User>,
+    State(AppState{db_conn: _, diesel_conn, keys: _}): State<AppState>,
+) -> impl IntoResponse {
+    if current_user.id.to_string() != user_id {
+        return UserWebError::Unauthorized.into_response();
+    }
+    //let user_uuid = Uuid::parse_str(&user_id).map_err(|_| UserWebError::DbError(UserError::UuidParseError))?;
+    let user = find_user_by_uuid(&diesel_conn, &user_id, None).await;
+
+    match user {
+        Ok(user) => {
+            tracing::info!("User found: {:?}", user);
+            Json(json!(user)).into_response()
+        }
+        Err(err) => {
+            match err {
+                UserError::UserNotFound(_) => {
+                    tracing::warn!("User not found: {}", user_id);
+                    return (StatusCode::NOT_FOUND, Json(json!({"error": "User not found"}))).into_response();
+                }
+                UserError::InvalidUuid(_) => {
+                    tracing::error!("Invalid UUID format for user_id: {}", user_id);
+                    return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid UUID format"}))).into_response();
+                }
+                UserError::NoDbConnectionError => {
+                    tracing::error!("No database connection available");
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database connection error"}))).into_response();
+                }
+                _ => {
+                    tracing::error!("Unexpected error finding user: {:?}", err);
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Unexpected error"}))).into_response();
+                }
+            }
+        }
+
+    }
 }

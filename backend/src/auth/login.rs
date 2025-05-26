@@ -24,6 +24,8 @@ type DieselPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgC
 pub enum LoginError {
     #[error("Authentication failed")]
     AuthError(#[source] anyhow::Error),
+    #[error("User not found")]
+    UserNotFound,
     #[error("Something's gone wrong")]
     UnexpectedError(#[from] anyhow::Error),
 }
@@ -80,7 +82,7 @@ impl From<UserError> for LoginError {
 impl IntoResponse for LoginError {
     fn into_response(self) -> Response<Body> {
         match self {
-            LoginError::AuthError(_) => {
+            LoginError::AuthError(_) | LoginError::UserNotFound => {
                 (axum::http::StatusCode::UNAUTHORIZED, unable_to_login_json()).into_response()
             }
             LoginError::UnexpectedError(_) => (
@@ -102,9 +104,9 @@ pub async fn login(
     let users = find_user(diesel, None, Some(&payload.username), None, None).await?;
     if users.len() > 1 {
         tracing::warn!("Multiple users found with username {}", payload.username);
-        Err(UserError::UserNotFound)?
+        return Err(LoginError::UserNotFound);
     }
-    let user = users.first().ok_or(UserError::UserNotFound)?.to_owned();
+    let user = users.first().ok_or(LoginError::UserNotFound)?.to_owned();
     let verify_result =
         verify(&payload.password, &user.password).map_err(UserError::BadDecryption)?;
 

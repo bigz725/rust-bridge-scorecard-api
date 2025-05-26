@@ -5,7 +5,7 @@ use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use sqlx::PgPool;
-use diesel::{associations::HasTable, prelude::*, r2d2::{ConnectionManager, Pool}};
+use diesel::{associations::HasTable, prelude::*, r2d2::{ConnectionManager, Pool} };
 use crate::web::routes_user::UserUpdatePayload;
 type DieselPool = Pool<ConnectionManager<PgConnection>>;
 
@@ -69,8 +69,9 @@ pub struct Role {
 pub enum UserError {
     NoDbConnectionError,
     BadDecryption(#[from] BcryptError),
+    InvalidUuid(#[from] uuid::Error),
     InvalidCredentials,
-    UserNotFound,
+    UserNotFound(#[from] diesel::result::Error),
 }
 
 impl Display for Role {
@@ -98,6 +99,30 @@ impl core::fmt::Display for UserError {
 #[tracing::instrument(target = "database", skip(_db))]
 pub async fn all_users(_db: &PgPool) -> Result<Vec<User>, UserError> {
     todo!()
+}
+
+#[tracing::instrument(target = "database", skip(diesel_pool))]
+pub async fn find_user_by_uuid(
+    diesel_pool: &DieselPool,
+    user_id_param: &str,
+    salt_param: Option<&str>,
+) -> Result<User, UserError> {
+    use crate::schema::users::dsl::*;
+    let mut conn = diesel_pool.clone().get().unwrap();
+    let user_id = Uuid::parse_str(user_id_param).map_err(UserError::InvalidUuid)?;
+    let mut query = users::table()
+        .into_boxed()
+        .filter(id.eq(user_id));
+
+    if let Some(slt) = salt_param {
+        query = query.filter(salt.eq(slt));
+    }
+    
+    let result = query
+        .select(User::as_select())
+        .first::<User>(&mut conn)?;
+
+    Ok(result)
 }
 
 #[tracing::instrument(target = "database", skip(diesel_pool))]

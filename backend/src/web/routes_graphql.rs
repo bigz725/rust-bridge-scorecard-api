@@ -2,7 +2,7 @@ use async_graphql::{extensions::Tracing, http::GraphiQLSource, EmptySubscription
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{body::Body, debug_handler, extract::{Request, State}, middleware::Next, response::{self, IntoResponse, Response}, routing::get, Extension, Router};
 use axum::middleware;
-use crate::{auth::{jwt::Claims, login::LoginError}, graphql::user::{Mutation, Query}, middlewares::auth::verify_jwt::{get_claims, BearerToken}, models::user::{find_user, User, UserError}, state::AppState};
+use crate::{auth::{jwt::Claims, login::LoginError}, graphql::user::{Mutation, Query}, middlewares::auth::verify_jwt::{get_claims, BearerToken}, models::user::{find_user_by_uuid, User, }, state::AppState};
 
 
 
@@ -85,32 +85,19 @@ pub async fn lookup_user_from_token(
     next: Next,
 ) -> Response<Body> {
     if let Some(claims) = claims {
-        let result = find_user(&diesel, Some(&claims.id), None, None, Some(&claims.salt))
+        let result = find_user_by_uuid(&diesel, &claims.id, Some(&claims.salt))
             .await
             .map_err(LoginError::from);
-        let users = match result {
-            Ok(users) => users,
-            Err(err) => {
-                tracing::error!("Error looking up user with id: {} and salt: {}", &claims.id, &claims.salt);
-                request.extensions_mut().insert::<Option<User>>(None);
-                return err.into_response();
-            }
-        };
-        let user = users.first();
-        match user {
-            Some(user) => {
+        match result {
+            Ok(user) => {
                 tracing::info!("User {} successfully looked up", user.username.clone());
                 request.extensions_mut().insert(Some(user.to_owned()));
                 next.run(request).await
             }
-            None => {
-                tracing::error!(
-                    "No user found with id: {} and salt: {}",
-                    &claims.id,
-                    &claims.salt
-                );
+            Err(err) => {
+                tracing::error!("Error looking up user with id: {} and salt: {}", &claims.id, &claims.salt);
                 request.extensions_mut().insert::<Option<User>>(None);
-                LoginError::from(UserError::UserNotFound).into_response()
+                return err.into_response();
             }
         }
     }

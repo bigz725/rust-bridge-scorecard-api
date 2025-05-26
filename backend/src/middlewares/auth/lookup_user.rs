@@ -6,7 +6,7 @@ use axum::{
     Extension,
 };
 
-use crate::{auth::jwt::Claims, models::user::find_user, state::AppState, auth::login::LoginError, models::user::UserError};
+use crate::{auth::jwt::Claims, models::user::find_user_by_uuid, state::AppState, auth::login::LoginError};
 
 #[tracing::instrument(skip(claims, diesel, request, next))]
 pub async fn lookup_user_from_token(
@@ -16,27 +16,23 @@ pub async fn lookup_user_from_token(
     next: Next,
 ) -> Response<Body> {
     //find_user(db: &Client, user_id: Option<&str>, username: Option<&str>, email: Option<&str>, salt: Option<&str>)
-    let result = find_user(&diesel, Some(&claims.id), None, None, Some(&claims.salt))
+    let result = find_user_by_uuid(&diesel, &claims.id, Some(&claims.salt))
         .await
         .map_err(LoginError::from);
-    let users = match result {
-        Ok(users) => users,
-        Err(err) => return err.into_response(),
-    };
-    let user = users.first();
-    match user {
-        Some(user) => {
+    match result {
+        Ok(user) => {
             tracing::info!("User {} successfully looked up", user.username.clone());
             request.extensions_mut().insert(user.to_owned());
             next.run(request).await
         }
-        None => {
+        Err(err) => {
             tracing::error!(
                 "Error looking up user with id: {} and salt: {}",
                 &claims.id,
                 &claims.salt
             );
-            LoginError::from(UserError::UserNotFound).into_response()
+            return err.into_response();
         }
     }
 }
+//sdfsdf
