@@ -14,34 +14,34 @@ name = "backend"
 
 [dependencies]
 anyhow = "1.0.86"
-async-graphql = {version="7.0.6", features=["bson","chrono","tracing","url","uuid", "graphiql", ]}
-async-graphql-axum = "7.0.6"
-axum = {version = "0.7.5", features=["macros"]}
+async-graphql = {version="7.0.15", features=["bson","chrono","tracing","url","uuid", "graphiql", ]}
+async-graphql-axum = "7.0.15"
+axum = {version = "0.8.3", features=["macros"]}
 base64 = "0.22.1"
-bcrypt = {version="0.15.1", features=["alloc"]}
-chrono = {version="0.4.38", features = ["serde"]}
-config = "0.14.0"
+bcrypt = {version="0.17.0", features=["alloc"]}
+chrono = {version = "0.4.40", features=["serde"]}
+config = "0.15.11"
 diesel = { version = "2.2.6", features = ["postgres", "chrono", "numeric", "serde_json", "uuid", "r2d2"] }
 dotenv = "0.15.0"
 futures = "0.3.30"
 jsonwebtoken = "9.3.0"
-rand = {version="0.8.5", features=["std_rng"]}
+rand = {version="0.9.1", features=["std_rng"]}
 secrecy = { version = "0.8.0", features = ["serde"] }
-serde = {version = "1.0.208", features = ["derive"]}
+serde = {version = "1.0.219", features = ["derive"]}
 serde-aux = "4.5.0"
-serde_json = "1.0.125"
-sqlx = {version = "0.8.2", features = ["runtime-tokio", "macros", "derive", "migrate", "postgres", "uuid", "bigdecimal", "json", "chrono"]}
-thiserror = "1.0.61"
-tokio = {version = "1.38.0", features = ["full"]}
-tokio-stream = "0.1.15"
-tower = "0.5.0"
-tower-http ={ version="0.5.2", features = ["full"]}
-tracing = {version="0.1.40"}#, features = ["trace"]}
-tracing-bunyan-formatter = "0.3.9"
-tracing-core = "0.1.32"
-tracing-log = "0.2.0"
-time = "0.3.35"
-tracing-subscriber ={ version = "0.3.18", features = ["json", "env-filter"] }
-uuid = {version = "1.9.1", features = ["serde", "v7", "v4"]}
-serde_alias = "0.0.2"
 
+serde_json = "1.0.140"
+sqlx = {version = "0.8.2", features = ["runtime-tokio", "macros", "derive", "migrate", "postgres", "uuid", "bigdecimal", "json", "chrono"]}
+thiserror = "2.0.12"
+tokio = {version = "1.44.2", features = ["full"]}
+tokio-stream = "0.1.15"
+tower = "0.5.2"
+tower-http ={ version="0.6.2", features = ["full"]}
+tracing = {version="0.1.41"}#, features = ["trace"]}
+tracing-bunyan-formatter = "0.3.9"
+tracing-core = "0.1.33"
+tracing-log = "0.2.0"
+time = "0.3.41"
+tracing-subscriber ={ version = "0.3.18", features = ["json", "env-filter"] }
+uuid = {version = "1.16.0", features = ["serde", "v7"]}
+serde_alias = "0.0.2"
