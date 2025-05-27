@@ -8,10 +8,9 @@ use axum::{
     routing::{get, post, put},
     Extension, Json, Router,
 };
-use bson::oid::ObjectId;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::str::FromStr;
+use uuid::Uuid;
 
 use crate::{
     auth::jwt::Claims,
@@ -19,26 +18,40 @@ use crate::{
         lookup_user::lookup_user_from_token, session_owner_guard::session_owner_guard,
         verify_jwt::get_claims_from_auth_token,
     },
-    models::session::{
-        create_session, get_sessions_for_user_id, update_session, NewSessionDTO, ScoringType, SessionError, SessionUpdateDTO
-    },
+    models::{scoring_type::ScoringTypeEnum, session::{
+        create_session, get_sessions_for_user_id, update_session, NewSession, Session, SessionError 
+    }},
     state::AppState,
 };
 
 #[derive(Debug, Deserialize)]
 pub struct SessionSearchPayload {
-    scoring_type: Option<ScoringType>,
+    scoring_type: Option<ScoringTypeEnum>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SessionUpdatePayload {
+    pub id: Uuid,
+    pub name: Option<String>,
+    pub location: Option<String>,
+    //pub date: NaiveDate,
+    pub scoring_type: Option<ScoringTypeEnum>,
+    pub should_use_victory_points: Option<bool>,
+
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum SessionWebError {
     #[error("Cannot save session to different user")]
     Unauthorized(String, String),
-    #[error("Bson error")]
-    BsonError(#[from] bson::oid::Error),
+    #[error("Invalid scoring type string")]
+    InvalidScoringTypeString(String),
     #[error("Data error")]
     UnexpectedError(#[from] SessionError),
+    #[error("Uuid error")]
+    UuidError(#[from] uuid::Error),
 }
+
 
 impl IntoResponse for SessionWebError {
     fn into_response(self) -> Response<Body> {
@@ -54,15 +67,21 @@ impl IntoResponse for SessionWebError {
                     .body(Json(json!({ "error": "Unauthorized" })).to_string().into())
                     .unwrap()
             }
+            SessionWebError::InvalidScoringTypeString(e) => {
+                Response::builder()
+                    .status(StatusCode::BAD_REQUEST)
+                    .body(Json(json!({ "error": e })).to_string().into())
+                    .unwrap()
+            }
             SessionWebError::UnexpectedError(e) => {
                 Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Json(json!({ "error": e.to_string() })).to_string().into())
                     .unwrap()
             }
-            SessionWebError::BsonError(e) => {
+            SessionWebError::UuidError(e) => {
                 Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .status(StatusCode::BAD_REQUEST)
                     .body(Json(json!({ "error": e.to_string() })).to_string().into())
                     .unwrap()
             }
@@ -84,62 +103,71 @@ pub fn routes(state: &AppState) -> Router<AppState> {
         .route_layer(get_claims_layer)
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(diesel_conn))]
 #[debug_handler]
 async fn session_search(
     Path(user_id): Path<String>,
     State(AppState {
-        mongodb_client: db,
+        db_conn: _,
+        diesel_conn,
         keys: _,
     }): State<AppState>,
     Json(payload): Json<SessionSearchPayload>,
 ) -> Result<Json<Value>, SessionWebError> {
-    let uid = ObjectId::from_str(&user_id)?;
-    let result = get_sessions_for_user_id(&db, &uid, payload.scoring_type).await?;
+    let user_uuid = uuid::Uuid::parse_str(&user_id).map_err(SessionWebError::UuidError)?;
+    let result = get_sessions_for_user_id(&diesel_conn, &user_uuid, payload.scoring_type).await?;
     Ok(Json(json!(result)))
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(diesel_conn))]
 #[debug_handler]
 async fn create_session_handler(
     Path(user_id): Path<String>,
     Extension(claims): Extension<Claims>,
     State(AppState {
-        mongodb_client: db,
+        db_conn: _,
+        diesel_conn,
         keys: _,
     }): State<AppState>,
-    Json(payload): Json<NewSessionDTO>,
-) -> Result<Json<Value>, SessionWebError> {
-    let owner_id = &payload.owner;
-    if &user_id != owner_id || &claims.id != owner_id {
-        return Err(SessionWebError::Unauthorized(claims.id, owner_id.clone()));
+    Json(payload): Json<NewSession>,
+) -> impl IntoResponse {
+    let proposed_owner_id = &payload.owner_id;
+    let target_user_uuid = uuid::Uuid::parse_str(&user_id).map_err(SessionWebError::UuidError)?;
+    let claims_user_uuid = uuid::Uuid::parse_str(&claims.id).map_err(SessionWebError::UuidError)?;
+    if &target_user_uuid != proposed_owner_id || &claims_user_uuid != proposed_owner_id {
+        return Err(SessionWebError::Unauthorized(claims.id, proposed_owner_id.to_string()));
     }
-    let result = create_session(&db, payload).await?;
-    Ok(Json(json!(result)))
+    create_session(&diesel_conn, payload).await
+        .map_err(|e| match e {
+            SessionError::InvalidScoringTypeString(s) => SessionWebError::InvalidScoringTypeString(s),
+            _ => SessionWebError::UnexpectedError(e),
+        })
+
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(diesel_conn))]
 #[debug_handler]
 async fn update_session_handler(
     Path((user_id, session_id)): Path<(String, String)>,
     Extension(claims): Extension<Claims>,
     State(AppState {
-        mongodb_client: db,
+        db_conn: _,
+        diesel_conn,
         keys: _,
     }): State<AppState>,
-    Json(payload): Json<SessionUpdateDTO>,
+    Json(payload): Json<Session>,
 ) -> impl IntoResponse {
     if user_id != claims.id  {
         return SessionWebError::Unauthorized(claims.id, user_id.clone()).into_response();
     }
-    match update_session(&db, &session_id, payload).await.map_err(SessionWebError::UnexpectedError)
+    let session_uuid = match uuid::Uuid::parse_str(&session_id).map_err(SessionWebError::UuidError) {
+        Ok(uuid) => uuid,
+        Err(e) => return e.into_response(),
+    };
+    match update_session(&diesel_conn, &session_uuid, payload).await.map_err(SessionWebError::UnexpectedError)
     {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => e.into_response(),
     
     }
-    // let retval = json!({"updated": session_id});
-    // StatusCode::NO_CONTENT.into_response()
-        //.body(Json(retval).to_string().into())
-        //.unwrap()
 }

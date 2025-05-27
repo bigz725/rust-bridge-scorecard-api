@@ -66,7 +66,7 @@ where
 #[tracing::instrument(skip(bearer_token, keys, request, next))]
 pub async fn get_claims_from_auth_token(
     bearer_token: BearerToken,
-    State(AppState{mongodb_client: _, keys}): State<AppState>,
+    State(AppState{db_conn: _, diesel_conn: _, keys}): State<AppState>,
     mut request: Request,
     next: Next,
 ) -> Response<Body> {

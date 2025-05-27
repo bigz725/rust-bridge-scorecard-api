@@ -1,13 +1,17 @@
 use axum::{
-    debug_handler,
-    extract::State,
-    routing::get,
-    Json, Router,
+    body::Body, debug_handler, extract::State, http::Response, response::IntoResponse, routing::get, Json, Router
 };
 use serde_json::{json, Value};
-use crate::{models::session::get_sessions, state::AppState};
+use crate::{models::session::{get_sessions, Session}, state::AppState};
 
 use super::routes_user_session::SessionWebError;
+
+impl IntoResponse for Session{
+    fn into_response(self) -> Response<Body> {
+        // Convert the Session struct to a JSON response
+        Json(json!(self)).into_response()
+    }
+}
 
 pub fn routes() -> Router<AppState> {
     // let get_claims_layer =
@@ -18,14 +22,15 @@ pub fn routes() -> Router<AppState> {
         .route("/api/sessions", get(session_search))
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(diesel))]
 #[debug_handler]
 async fn session_search(
     State(AppState {
-        mongodb_client: db,
+        db_conn: _,
+        diesel_conn: diesel,
         keys: _,
     }): State<AppState>,
 ) -> Result<Json<Value>, SessionWebError> {
-    let result = get_sessions(&db, None).await?;
+    let result = get_sessions(&diesel, None).await?;
     Ok(Json(json!(result)))
 }

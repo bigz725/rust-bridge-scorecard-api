@@ -4,10 +4,9 @@ application:
   jwt_secret: "for_testing_only_sdfsdf_sdwetergrtbfb_ert343454tergdfggergergergergwsdfwefqwedqwedsdvergerg3e4wt34werwefwe"
 database:
   host: "localhost"
-  port: 27017
-  database_name: "bridge_scorecard_api"
+  port: 5432
+  database_name: "bridge_scorecard_development"
   tls: false
-  app_name: "rust_bridge_scorecard_api"
   min_pool_size: 5
   max_pool_size: 10
   username: 

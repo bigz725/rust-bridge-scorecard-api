@@ -1,0 +1,7 @@
+_id,name,location,date,owner,scoringType,shouldUseVictoryPoints,boards[0].boardNumber,boards[0].contract,boards[0]._id,boards[0].we,boards[0].wePercentage,createdAt,updatedAt,__v,victoryPoints,boards[0].weImps
+6464579114ec826cf8045c2e,Staging Session 1,Paddy’s Pub,2023-05-17T04:26:42.000Z,641e18d9b0663f24a2074805,MP,false,1,4sw,64645de714ec826cf8045c3d,100,50,2023-05-17T04:26:57.639Z,2023-09-09T15:05:10.556Z,3,,
+64b837794de2049d1ecc0f48,swiss 1,kubernetes cluster,2023-08-01T00:00:00.000Z,641e18d9b0663f24a2074805,IMP,false,2,4♥️w,64b871708bdce21954465943,620,,2023-07-19T19:20:25.966Z,2023-07-19T23:28:08.664Z,2,1,5
+64bb675867dcbf4bd692218f,summer sectional,omaha,2023-01-01T00:00:00.000Z,641e2565b0663f24a2074817,MP,false,,,,,,2023-07-22T05:21:28.097Z,2023-07-22T05:21:28.097Z,0,,
+64bf3f46c11e91104b599f2e,summer sectional,omaha,2023-01-01T00:00:00.000Z,641e2565b0663f24a2074817,MP,false,,,,,,2023-07-25T03:19:34.780Z,2023-07-25T03:19:34.780Z,0,,
+6518806f7dd1cc8f52a03072,fall sectional,itchitraw,2023-01-01T00:00:00.000Z,641e2565b0663f24a2074817,MP,false,,,,,,2023-09-30T20:09:19.434Z,2023-09-30T20:09:19.434Z,0,,
+6519924ed0efb32327a4d739,winter sectional,toe picker,2023-01-01T00:00:00.000Z,641e2565b0663f24a2074817,MP,false,,,,,,2023-10-01T15:37:50.020Z,2023-10-01T15:37:50.020Z,0,,
