@@ -1,0 +1,2 @@
+CREATE USER zkissane WITH SUPERUSER PASSWORD 'kissanepi110';
+

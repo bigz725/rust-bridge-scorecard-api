@@ -1,7 +1,9 @@
+use diesel::prelude::*;
+use diesel::r2d2::{ConnectionManager, Pool};
+use sqlx::PgPool;
 use tokio::net::TcpListener;
 use axum::{middleware, Router};
 use axum::routing::IntoMakeService;
-use mongodb::Client;
 use secrecy::{ExposeSecret, Secret};
 
 use crate::middlewares::request_id::add_session_id;
@@ -10,6 +12,7 @@ use crate::middlewares::request_id::add_session_id;
 use crate::web::{routes_session, routes_user_session};
 use crate::{ auth::jwt::Keys, configuration::{DatabaseSettings, Settings}, state::AppState, telemetry::add_trace_layer, web::{routes_hello, routes_login, routes_user, routes_graphql, routes_logout} };
 
+type DieselPool = Pool<ConnectionManager<PgConnection>>;
 
 pub struct Application {
     pub port: u16,
@@ -28,12 +31,13 @@ impl Application {
     }
     pub async fn build(configuration: Settings) -> Result<Self, anyhow::Error> {
         let db_conn = get_db_conn(&configuration.database).await;
+        let diesel_conn = get_diesel_pool(&configuration.database);
 
         let address = format!("{}:{}", configuration.application.host, configuration.application.port);
         let jwt_secret = configuration.application.jwt_secret.clone();
 
         Ok(
-            Self::new(run(db_conn, jwt_secret).await, TcpListener::bind(address).await?)
+            Self::new(run(db_conn, diesel_conn, jwt_secret).await, TcpListener::bind(address).await?)
         )
     }
 
@@ -49,13 +53,15 @@ impl Application {
 pub struct ApplicationBaseUrl(pub String);
 
 async fn run(
-    db_conn: Client,
+    db_conn: PgPool,
+    diesel_conn: DieselPool,
     jwt_secret: Secret<String>,
 ) -> IntoMakeService<Router> {
     let jwt_bytes = jwt_secret.expose_secret().as_bytes();
     let keys = Keys::new(jwt_bytes);
     let state = AppState {
-        mongodb_client: db_conn,
+        db_conn,
+        diesel_conn,
         keys
     };
 
@@ -75,17 +81,58 @@ async fn run(
     .into_make_service()
 }
 
-pub async fn get_db_conn(configuration: &DatabaseSettings) -> Client {
-    let client = Client::with_options(configuration.with_db().await);
-    match client {
-        Ok(client) => {
-            tracing::info!("Connected to MongoDB at {}", configuration.host);
-            client
+pub async fn get_db_conn(configuration: &DatabaseSettings) -> PgPool {
+
+    let pool = PgPool::connect_with(configuration.with_db().await)
+        .await;
+    match pool {
+        Ok(pool) => {
+            tracing::info!("Connected to Postgres at {}", configuration.host);
+            pool
         }
         Err(e) => {
-            tracing::error!("Failed to connect to MongoDB: {:?}", e);
-            panic!("Failed to connect to MongoDB: {:?}", e);
+            tracing::error!("Failed to connect to Postgres: {:?}", e);
+            panic!("Failed to connect to Postgres: {:?}", e);
         }
     }
 }
 
+pub fn get_diesel_pool(configuration: &DatabaseSettings) -> DieselPool {
+    let url = build_url(configuration);
+    let manager = ConnectionManager::<PgConnection>::new(url);
+    let max_size = configuration.max_pool_size.unwrap_or(10);
+    let pool = Pool::builder()
+                            .test_on_check_out(true)
+                            .max_size(max_size)
+                            .build(manager);
+    match pool {
+        Ok(pool) => { 
+            tracing::info!("Created diesel postgres pool");
+            pool
+        }
+        Err(e) => {
+            tracing::error!("Failed to create diesel postgres pool: {:?}", e);
+            panic!("Failed to create diesel postgres pool: {:?}", e);
+        }
+    }
+}
+
+fn build_url(configuration: &DatabaseSettings) -> String {
+    let password = match configuration.password {
+        None => {
+            "password".to_string()
+        }
+        Some(ref secret) => {
+            secret.expose_secret().to_string()
+        }
+    };
+
+    format!(
+        "postgres://{}:{}@{}:{}/{}",
+        configuration.username.clone().unwrap_or_else(|| "postgres".to_string()),
+        password.clone(),
+        configuration.host.clone(),
+        configuration.port,
+        configuration.database_name.clone(),
+    )
+}

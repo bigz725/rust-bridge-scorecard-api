@@ -1,7 +1,9 @@
-use axum::{debug_handler, extract::State, middleware, routing::post, Json, Router};
+use axum::{body::Body, debug_handler, extract::{Path, State}, http::StatusCode, middleware, response::{IntoResponse, Response}, routing::{put,post,get}, Extension, Json, Router};
 use serde_json::{json, Value};
-use crate::{auth::login::LoginError,middlewares::auth::{lookup_user::lookup_user_from_token, verify_jwt::get_claims_from_auth_token}, models::user::find_user, state::AppState};
+use uuid::Uuid;
+use crate::{auth::login::LoginError,middlewares::auth::{lookup_user::lookup_user_from_token, verify_jwt::get_claims_from_auth_token}, models::user::{find_user, update_user, find_user_by_uuid, User, UserError}, state::AppState};
 use serde::Deserialize;
+
 
 
 #[derive(Debug, Deserialize)]
@@ -10,23 +12,133 @@ struct UserSearchPayload {
     email: Option<String>,
     user_id: Option<String>,
 }
+#[derive(Debug, Deserialize)]
+pub struct UserUpdatePayload {
+    pub id: Uuid,
+    pub username: Option<String>,
+    pub email: Option<String>,
+    pub password: Option<String>,
+}
 
+#[derive(thiserror::Error, Debug)]
+enum UserWebError {
+    #[error("Unauthorized")]
+    Unauthorized,
+    #[error("Data error")]
+    DbError(#[from] UserError),
+    // #[error("Unexpected error")]
+    // UnexpectedError,
+}
+
+impl IntoResponse for UserWebError {
+    fn into_response(self) -> Response<Body> {
+        match self {
+            UserWebError::Unauthorized => {
+                tracing::error!("Unauthorized");
+                Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .body(Json(json!({ "error": "Unauthorized" })).to_string().into())
+                    .unwrap()
+            }
+            UserWebError::DbError(err) => {
+                tracing::error!("Data error {:?}", err);
+                Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Json(json!({ "error": "Data error" })).to_string().into())
+                    .unwrap()
+            }
+            // UserWebError::UnexpectedError => {
+            //     tracing::error!("Unexpected error");
+            //     Response::builder()
+            //         .status(StatusCode::INTERNAL_SERVER_ERROR)
+            //         .body(Json(json!({ "error": "Unexpected error" })).to_string().into())
+            //         .unwrap()
+            // }
+        }
+    }
+}
+
+impl IntoResponse for UserError {
+    fn into_response(self) -> Response<Body> {
+        match self {
+                UserError::UserNotFound(_) => {
+                    tracing::error!("User not found");
+                    (StatusCode::NOT_FOUND, Json(json!({"error": "User not found"}))).into_response()
+                }
+                UserError::InvalidUuid(_) => {
+                    tracing::error!("Invalid UUID format");
+                    (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid UUID format"}))).into_response()
+                }
+                UserError::NoDbConnectionError => {
+                    tracing::error!("No database connection available");
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database connection error"}))).into_response()
+                }
+                _ => {
+                    tracing::error!("Unexpected error: {:?}", self);
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Unexpected error"}))).into_response()
+                }
+        }
+    }
+}
+
+impl IntoResponse for User {
+    fn into_response(self) -> Response<Body> {
+        tracing::debug!("Returning user response: {:?}", self);
+        Json(json!(self)).into_response()
+    }
+}
 pub fn routes(state: &AppState) -> Router<AppState> {
     let get_claims_layer = middleware::from_fn_with_state(state.clone(), get_claims_from_auth_token);
     let lookup_user_layer = middleware::from_fn_with_state(state.clone(), lookup_user_from_token);
     Router::new()
         .route("/api/user/search", post(user_search))
-         .route_layer(lookup_user_layer)
-         .route_layer(get_claims_layer)
+        .route("/api/user/:user_id", put(user_update))
+        .route("/api/user/:user_id", get(user_find_by_id))
+        .route_layer(lookup_user_layer)
+        .route_layer(get_claims_layer)
         
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(diesel_conn))]
 #[debug_handler]
 async fn user_search(
-    State(AppState{mongodb_client: db, keys: _}): State<AppState>,
+    State(AppState{db_conn: _, diesel_conn, keys: _}): State<AppState>,
     payload: Json<UserSearchPayload>,
 ) -> Result<Json<Value>, LoginError> {
-    let result = find_user(&db, payload.user_id.as_deref(), payload.username.as_deref(), payload.email.as_deref(), None).await?;
+    let result = find_user(&diesel_conn, payload.user_id.as_deref(), payload.username.as_deref(), payload.email.as_deref(), None).await?;
     Ok(Json(json!(result)))
+}
+
+#[tracing::instrument(skip(diesel_conn))]
+#[debug_handler]
+async fn user_update(
+    Path(target_user_id): Path<String>,
+    Extension(current_user): Extension<User>,
+    State(AppState{db_conn: _, diesel_conn, keys: _}): State<AppState>,
+    Json(payload): Json<UserUpdatePayload>,
+) -> impl IntoResponse {
+    if current_user.id.to_string() != target_user_id {
+        return UserWebError::Unauthorized.into_response();
+    }
+    let result = update_user(&diesel_conn, payload.into())
+        .await;
+    match result {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(err) => err.into_response(),
+    }
+
+}
+
+#[tracing::instrument(skip(diesel_conn))]
+#[debug_handler]
+async fn user_find_by_id(
+    Path(user_id): Path<String>,
+    Extension(current_user): Extension<User>,
+    State(AppState{db_conn: _, diesel_conn, keys: _}): State<AppState>,
+) -> impl IntoResponse {
+    if current_user.id.to_string() != user_id {
+        return UserWebError::Unauthorized.into_response();
+    }
+    //let user_uuid = Uuid::parse_str(&user_id).map_err(|_| UserWebError::DbError(UserError::UuidParseError))?;
+    find_user_by_uuid(&diesel_conn, &user_id, None).await.into_response()
 }

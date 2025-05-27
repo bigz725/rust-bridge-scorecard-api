@@ -1,90 +1,77 @@
 use async_graphql::SimpleObject;
 use bcrypt::BcryptError;
-use bson::{oid::ObjectId, serde_helpers::serialize_bson_datetime_as_rfc3339_string, Bson, Document};
-use mongodb::{
-    bson::{doc, DateTime},
-    Client, Collection,
-};
+use chrono::NaiveDateTime;
+use uuid::Uuid;
 use serde::{Deserialize, Serialize};
-use std::{fmt::{Display, Formatter, Result as FmtResult}, str::FromStr
-};
-//use tokio_stream::StreamExt;
-use futures::stream::TryStreamExt;
+use std::fmt::{Display, Formatter, Result as FmtResult};
+use sqlx::PgPool;
+use diesel::{associations::HasTable, prelude::*, r2d2::{ConnectionManager, Pool} };
+use crate::web::routes_user::UserUpdatePayload;
+type DieselPool = Pool<ConnectionManager<PgConnection>>;
 
-#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject)]
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable, Identifiable, AsChangeset)]
+#[diesel(table_name = crate::schema::users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
-    #[serde(rename = "_id")]
-    pub id: ObjectId,
-    pub username: String,
-    pub password: String,
-    pub salt: String,
+    pub id: Uuid,
     pub email: String,
-    // !!! ATTENTION !!!
-    // When getting users from Mongodb, you must handle the roles.
-    // The find_user method does this through an aggregation pipeline.
-    // If you add another search method, you must handle the roles somehow.
-    // Otherwise, you will get a deserialization error, and it will complain
-    // about a missing "_id" field, but won't tell you it comes from the vec of roles.
-    #[serde(skip_serializing)]
-    pub roles: Vec<Role>,
-
-    #[serde(
-        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "createdAt"
-    )]
-    pub created_at: DateTime,
-    #[serde(
-        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "updatedAt"
-    )]
-    pub updated_at: DateTime,
+    pub password: String,
+    pub salt: String,    
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub username: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::schema::users)]
 pub struct NewUser {
-    pub username: String,
+    pub email: String,
     pub password: String,
     pub salt: String,
-    pub email: String,
-    pub roles: Vec<Role>,
-    #[serde(
-        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "createdAt"
-    )]
-    pub created_at: DateTime,
-    #[serde(
-        //serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "updatedAt"
-    )]
-    pub updated_at: DateTime,
+    pub username: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject)]
+#[derive(Debug, Deserialize, Serialize, Clone, AsChangeset, Default)]
+#[diesel(table_name = crate::schema::users)]
+pub struct UpdateUser {
+    pub id: Uuid,
+    pub username: Option<String>,
+    pub email: Option<String>,
+    pub password: Option<String>,
+    pub salt: Option<String>,
+}
+
+impl From<UserUpdatePayload> for UpdateUser {
+    fn from(payload: UserUpdatePayload) -> Self {
+        UpdateUser {
+            id: payload.id,
+            username: payload.username,
+            email: payload.email,
+            password: payload.password,
+            salt: None,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, SimpleObject, Queryable, Selectable, Identifiable)]
+#[diesel(table_name = crate::schema::roles)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Role {
     #[serde(rename = "_id")]
-    pub id: ObjectId,
+    pub id: Uuid,
     pub name: String,
-    #[serde(
-        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "createdAt"
-    )]
-    pub created_at: DateTime,
-    #[serde(
-        serialize_with = "serialize_bson_datetime_as_rfc3339_string",
-        rename = "updatedAt"
-    )]
-    pub updated_at: DateTime,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum UserError {
     NoDbConnectionError,
-    QueryError(#[from] mongodb::error::Error),
-    InvalidUserRecord(#[from] bson::de::Error),
     BadDecryption(#[from] BcryptError),
+    InvalidUuid(#[from] uuid::Error),
     InvalidCredentials,
-    UserNotFound,
+    UserNotFound(#[from] diesel::result::Error),
 }
 
 impl Display for Role {
@@ -109,110 +96,97 @@ impl core::fmt::Display for UserError {
     }
 }
 
-impl From<User> for Bson {
-    fn from(user: User) -> Bson {
-        bson::to_bson(&user).unwrap()
+#[tracing::instrument(target = "database", skip(_db))]
+pub async fn all_users(_db: &PgPool) -> Result<Vec<User>, UserError> {
+    todo!()
+}
+
+#[tracing::instrument(target = "database", skip(diesel_pool))]
+pub async fn find_user_by_uuid(
+    diesel_pool: &DieselPool,
+    user_id_param: &str,
+    salt_param: Option<&str>,
+) -> Result<User, UserError> {
+    use crate::schema::users::dsl::*;
+    let mut conn = diesel_pool.clone().get().unwrap();
+    let user_id = Uuid::parse_str(user_id_param).map_err(UserError::InvalidUuid)?;
+    let mut query = users::table()
+        .into_boxed()
+        .filter(id.eq(user_id));
+
+    if let Some(slt) = salt_param {
+        query = query.filter(salt.eq(slt));
     }
-}
-
-#[tracing::instrument(target = "database", skip(db))]
-pub async fn all_users(db: &Client) -> Result<Vec<User>, UserError> {
-    let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
-    let pipeline = vec![
-        stage_lookup_roles(),
-    ];
-    do_vec_aggregation(users, pipeline).await
-}
-
-#[tracing::instrument(target = "database", skip(db))]
-pub async fn find_user(
-    db: &Client,
-    user_id: Option<&str>,
-    username: Option<&str>,
-    email: Option<&str>,
-    salt: Option<&str>,
-) -> Result<Vec<User>, UserError> {
-    let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
-    let pipeline = vec![
-        stage_lookup_user(user_id, username, email, salt),
-        stage_lookup_roles(),
-    ];
-    do_vec_aggregation(users, pipeline).await
-}
-
-pub async fn save_user(db: &Client, user: NewUser) -> Result<(), UserError> {
-    let users: Collection<NewUser> = db.database("bridge_scorecard_api").collection("users");
-    users.insert_one(user).await?;
-    Ok(())
-}
-
-pub async fn update_user(db: &Client, user: &User) -> Result<(), UserError> {
-    let users: Collection<User> = db.database("bridge_scorecard_api").collection("users");
-    users.update_one(
-        doc! {"_id": user.id},
-        doc! {"$set": user},
-    )
-    .await?;
-    Ok(())
-}
-
-#[tracing::instrument(target = "database", skip(users), level = "trace")]
-async fn do_vec_aggregation(
-    users: Collection<User>,
-    pipeline: Vec<Document>,
-) -> Result<Vec<User>, UserError> {
-    let mut cursor = users.aggregate(pipeline).await?;
-    let mut results: Vec<User> = Vec::new();
-
-    while let Some(document) = cursor.try_next().await? {
-        let bson = bson::from_document(document)
-            .map_err(|e| {
-                tracing::error!("Error in from_document: {:?}", e);
-                e
-            })?;
-        tracing::info!("{:?}", bson);
-        let user: User = bson::from_bson(bson)
-            .map_err(|e| {
-                tracing::error!("Error in from_bson: {:?}", e);
-                e
-            })?;
-        results.push(user);
-    }
-    Ok(results)
     
+    let result = query
+        .select(User::as_select())
+        .first::<User>(&mut conn)?;
+
+    Ok(result)
 }
 
-fn stage_lookup_user(
-    user_id: Option<&str>,
-    username: Option<&str>,
-    email: Option<&str>,
-    salt: Option<&str>,
-) -> Document {
-    let mut filter = doc! {};
-    if let Some(user_id) = user_id {
-        filter.insert("_id", ObjectId::from_str(user_id).unwrap());
+#[tracing::instrument(target = "database", skip(diesel_pool))]
+pub async fn find_user(
+    diesel_pool: &DieselPool,
+    user_id_param: Option<&str>,
+    username_param: Option<&str>,
+    email_param: Option<&str>,
+    salt_param: Option<&str>,
+) -> Result<Vec<User>, UserError> {
+    use crate::schema::users::dsl::*;
+    let mut conn = diesel_pool.clone().get().unwrap();
+    let mut query = users::table().into_boxed();
+    
+    if let Some(user_id) = user_id_param {
+        query = query.filter(id.eq(Uuid::parse_str(user_id).unwrap()));
     }
-    if let Some(username) = username {
-        filter.insert("username", username);
+    if let Some(uname) = username_param {
+        query = query.filter(username.eq(uname));
     }
-    if let Some(email) = email {
-        filter.insert("email", email);
+    if let Some(em) = email_param {
+        query = query.filter(email.eq(em));
     }
-    if let Some(salt) = salt {
-        filter.insert("salt", salt);
+    if let Some(slt) = salt_param {
+        query = query.filter(salt.eq(slt));
     }
-    doc! {
-        "$match": filter
-    }
+
+    query
+        .limit(5)
+        .select(User::as_select())
+        .load::<User>(&mut conn)
+        .map_err(|e| {
+            tracing::error!("Error: {:?}", e);
+            UserError::NoDbConnectionError
+        })
 }
 
-fn stage_lookup_roles() -> Document {
-    doc! {
-        "$lookup": doc!{
-            "from": "roles",
-            "localField": "roles",
-            "foreignField": "_id",
-            "as": "roles"
-        }
-    }
+pub async fn save_user(db: &DieselPool, user: &NewUser) -> Result<(), UserError> {
+    use crate::schema::users::dsl::*;
+    let mut conn = db.clone().get().unwrap();
+
+    diesel::insert_into(users)
+        .values(user)
+        .execute(&mut conn)
+        .map_err(|e| {
+            tracing::error!("Error: {:?}", e);
+            UserError::NoDbConnectionError
+        })?;
+
+    Ok(())
+}
+
+pub async fn update_user(db: &DieselPool, user_param: UpdateUser) -> Result<(), UserError> {
+    use crate::schema::users::dsl::*;
+    let mut conn = db.clone().get().unwrap();
+    
+    diesel::update(users)
+        .filter(id.eq(user_param.id))
+        .set(user_param)
+        .execute(&mut conn)
+        .map_err(|e| {
+            tracing::error!("Error: {:?}", e);
+            UserError::NoDbConnectionError
+        })?;
+
+    Ok(())
 }

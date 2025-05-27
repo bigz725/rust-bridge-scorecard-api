@@ -13,15 +13,19 @@ use axum::{
 };
 use bcrypt::verify;
 use chrono::Utc;
-use mongodb::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use super::jwt::Keys;
+
+type DieselPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgConnection>>;
+
 #[derive(thiserror::Error, Debug)]
 pub enum LoginError {
     #[error("Authentication failed")]
     AuthError(#[source] anyhow::Error),
+    #[error("User not found")]
+    UserNotFound,
     #[error("Something's gone wrong")]
     UnexpectedError(#[from] anyhow::Error),
 }
@@ -41,7 +45,7 @@ impl LoginResponse {
             id: user.id.to_string(),
             username: user.username,
             email: user.email,
-            roles: process_roles(user.roles),
+            roles: Vec::<String>::new(),
             access_token: token,
         }
     }
@@ -69,9 +73,7 @@ pub struct LoginPayload {
 impl From<UserError> for LoginError {
     fn from(err: UserError) -> Self {
         match err {
-            UserError::BadDecryption(_)
-            | UserError::QueryError(_)
-            | UserError::InvalidUserRecord(_) => LoginError::UnexpectedError(err.into()),
+            UserError::BadDecryption(_) => LoginError::UnexpectedError(err.into()),
             _ => Self::AuthError(err.into()),
         }
     }
@@ -80,7 +82,7 @@ impl From<UserError> for LoginError {
 impl IntoResponse for LoginError {
     fn into_response(self) -> Response<Body> {
         match self {
-            LoginError::AuthError(_) => {
+            LoginError::AuthError(_) | LoginError::UserNotFound => {
                 (axum::http::StatusCode::UNAUTHORIZED, unable_to_login_json()).into_response()
             }
             LoginError::UnexpectedError(_) => (
@@ -92,19 +94,19 @@ impl IntoResponse for LoginError {
     }
 }
 
-#[tracing::instrument(target = "login", skip(db, keys, payload))]
+#[tracing::instrument(target = "login", skip(diesel, keys, payload))]
 pub async fn login(
-    db: &Client,
+    diesel: &DieselPool,
     keys: &Keys,
     payload: LoginPayload,
 ) -> Result<LoginResponse, LoginError> {
     
-    let users = find_user(db, None, Some(&payload.username), None, None).await?;
+    let users = find_user(diesel, None, Some(&payload.username), None, None).await?;
     if users.len() > 1 {
         tracing::warn!("Multiple users found with username {}", payload.username);
-        Err(UserError::UserNotFound)?
+        return Err(LoginError::UserNotFound);
     }
-    let user = users.first().ok_or(UserError::UserNotFound)?.to_owned();
+    let user = users.first().ok_or(LoginError::UserNotFound)?.to_owned();
     let verify_result =
         verify(&payload.password, &user.password).map_err(UserError::BadDecryption)?;
 
